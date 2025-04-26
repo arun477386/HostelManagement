@@ -1,4 +1,4 @@
-import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { app } from './firebase';
 import { Owner, Hostel, Student } from '../types/hostelSchema';
 
@@ -110,4 +110,16 @@ export const createHostel = async (ownerId: string, hostelData: Omit<Hostel, 'ro
     console.error('Error creating hostel:', error);
     throw error;
   }
+};
+
+export const addRecentActivity = async (ownerId: string, activity: any) => {
+  const activitiesRef = collection(db, 'owners', ownerId, 'recentActivities');
+  await addDoc(activitiesRef, activity);
+};
+
+export const getRecentActivities = async (ownerId: string, max = 10) => {
+  const activitiesRef = collection(db, 'owners', ownerId, 'recentActivities');
+  const q = query(activitiesRef, orderBy('createdAt', 'desc'), limit(max));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }; 

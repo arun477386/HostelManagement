@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../services/AuthContext';
-import { createHostel } from '../services/firestoreService';
+import { createHostel, addRecentActivity } from '../services/firestoreService';
 import { useHostelStore } from '../services/hostelStore';
+import { useActivityContext } from '../services/ActivityContext';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { layout } from '../theme/layout';
@@ -37,7 +38,8 @@ export default function CreateHostelScreen() {
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
-  const { setSelectedHostelId } = useHostelStore();
+  const { setSelectedHostelId, fetchHostels } = useHostelStore();
+  const { triggerRefresh } = useActivityContext();
 
   const handleSubmit = async () => {
     // Validate form
@@ -63,10 +65,23 @@ export default function CreateHostelScreen() {
         totalFloors: parseInt(formData.totalFloors),
         createdAt: new Date().toISOString(),
         isActive: true,
+        recentActivities: {},
       };
 
       // Create hostel in Firestore
       const hostelId = await createHostel(user.uid, hostelData);
+
+      // Add recent activity for hostel creation
+      await addRecentActivity(user.uid, {
+        type: 'hostel_added',
+        message: `Hostel '${formData.name}' was created`,
+        hostelId: hostelId,
+        createdAt: new Date().toISOString(),
+      });
+      triggerRefresh();
+
+      // Refetch hostels list so the new hostel appears immediately
+      await fetchHostels(user.uid);
 
       // Set this hostel as the selected hostel
       setSelectedHostelId(hostelId);

@@ -1,15 +1,20 @@
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, ActivityIndicator, Modal, FlatList, Pressable } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, ActivityIndicator, Modal, FlatList, Pressable, RefreshControl } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../services/AuthContext';
 import { router } from 'expo-router';
-import { createStudent, getOwnerDocument } from '../../services/firestoreService';
+import { createStudent, getOwnerDocument, addRecentActivity, getRecentActivities } from '../../services/firestoreService';
 import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firestoreService';
 import { useHostelStore } from '../../services/hostelStore';
 import { Student as SchemaStudent, CustomCharge as SchemaCustomCharge } from '../../types/hostelSchema';
-import { differenceInMonths, parseISO } from 'date-fns';
+import { differenceInMonths, parseISO, format } from 'date-fns';
+import { getStudentPaidStatus } from '../../utils/finance';
+import { useFocusEffect } from '@react-navigation/native';
+import React from 'react';
+import { useActivityContext } from '../../services/ActivityContext';
+import HostelSelectorModal from '../../components/HostelSelectorModal';
 
 type SharingType = '1' | '2' | '3' | '4' | '5' | 'other';
 
@@ -65,6 +70,43 @@ export default function Add() {
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [filterDropdownVisible, setFilterDropdownVisible] = useState(false);
+  const [studentFilter, setStudentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const { triggerRefresh } = useActivityContext();
+  const [refreshing, setRefreshing] = useState(false);
+  const filterIconRef = useRef<View>(null);
+  const [filterDropdownPosition, setFilterDropdownPosition] = useState<{ left: number; top: number } | null>(null);
+
+  const fetchHostels = async () => {
+    try {
+      if (!user) return;
+      const ownerDoc = await getOwnerDocument(user.uid);
+      if (!ownerDoc) return;
+      const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
+        id,
+        name: hostel.name,
+      }));
+      setHostels(hostelsArray);
+      // Set first hostel as default if none is selected
+      if (hostelsArray.length > 0 && (!selectedHostelId || selectedHostelId === 'all')) {
+        const firstHostelId = hostelsArray[0].id;
+        setSelectedHostelId(firstHostelId);
+        setFormData(prev => ({ ...prev, hostelId: firstHostelId }));
+      }
+    } catch (error) {
+      // Error handling
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchHostels();
+    }, [user])
+  );
+
+  useEffect(() => {
+    fetchHostels();
+  }, [user]);
 
   const fetchStudents = async () => {
     if (!user || !selectedHostelId || selectedHostelId === 'all') {
@@ -100,35 +142,6 @@ export default function Add() {
   useEffect(() => {
     fetchStudents();
   }, [user, selectedHostelId]);
-
-  useEffect(() => {
-    const fetchHostels = async () => {
-      try {
-        if (!user) return;
-
-        const ownerDoc = await getOwnerDocument(user.uid);
-        if (!ownerDoc) return;
-
-        const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
-          id,
-          name: hostel.name,
-        }));
-
-        setHostels(hostelsArray);
-
-        // Set first hostel as default if none is selected
-        if (hostelsArray.length > 0 && (!selectedHostelId || selectedHostelId === 'all')) {
-          const firstHostelId = hostelsArray[0].id;
-          setSelectedHostelId(firstHostelId);
-          setFormData(prev => ({ ...prev, hostelId: firstHostelId }));
-        }
-      } catch (error) {
-        // Error handling
-      }
-    };
-
-    fetchHostels();
-  }, [user]);
 
   const handleAddCharge = () => {
     setFormData(prev => ({
@@ -205,7 +218,7 @@ export default function Add() {
       };
 
       // Create student in Firestore
-      await createStudent(user.uid, formData.hostelId, formData.roomId, studentData);
+      const studentId = await createStudent(user.uid, formData.hostelId, formData.roomId, studentData);
 
       // Reset form fields
       setFormData({
@@ -227,6 +240,30 @@ export default function Add() {
 
       // Show success message
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Add activity with proper data structure
+      const hostelName = hostels.find(h => h.id === formData.hostelId)?.name || '';
+      await addRecentActivity(user.uid, {
+        type: 'student_added',
+        message: `${formData.fullName} joined ${hostelName}`,
+        hostelId: formData.hostelId,
+        studentId: studentId,
+        createdAt: new Date().toISOString(),
+      });
+      // Fetch recent activities immediately so UI updates without reload
+      if (typeof getRecentActivities === 'function') {
+        try {
+          const recentActivities = await getRecentActivities(user.uid);
+          if (recentActivities && typeof window !== 'undefined') {
+            // If you have a context or state for activities, update it here
+            // For example, if using useActivityContext or similar:
+            if (typeof triggerRefresh === 'function') triggerRefresh();
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+      triggerRefresh();
     } catch (err: any) {
       setError(err.message || 'An error occurred while adding the student');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -258,6 +295,12 @@ export default function Add() {
       }
     }
   };
+
+  const filteredStudents = students.filter(student => {
+    if (studentFilter === 'all') return true;
+    const status = getStudentPaidStatus(student);
+    return studentFilter === 'paid' ? status === 'Paid' : status === 'Unpaid';
+  });
 
   const renderStudentCard = ({ item }: { item: Student }) => {
     const paidStatus = checkPaidStatus(item);
@@ -291,6 +334,18 @@ export default function Add() {
     );
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchHostels();
+      await fetchStudents();
+    } catch (e) {
+      // Optionally handle error
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Top Bar */}
@@ -302,7 +357,11 @@ export default function Add() {
               onPress={() => setIsHostelDropdownOpen(!isHostelDropdownOpen)}
             >
               <Ionicons name="business-outline" size={16} color="#4B9EFF" />
-              <Text style={styles.hostelText}>
+              <Text
+                style={styles.hostelText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {hostels.find(h => h.id === selectedHostelId)?.name}
               </Text>
               <Ionicons 
@@ -313,27 +372,59 @@ export default function Add() {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity 
-          style={styles.searchButton}
-          onPress={() => {
-            // TODO: Implement search functionality
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-        >
-          <Ionicons name="search-outline" size={24} color="#4B9EFF" />
-        </TouchableOpacity>
         <TouchableOpacity
           style={styles.addStudentButton}
           onPress={() => setIsAddModalVisible(true)}
         >
-          <Ionicons name="person-add-outline" size={24} color="#4B9EFF" />
           <Text style={styles.addStudentButtonText}>Add</Text>
+          <Ionicons name="person-add-outline" size={24} color="#4B9EFF" style={styles.addStudentButtonIcon} />
         </TouchableOpacity>
+        <TouchableOpacity
+          ref={filterIconRef}
+          style={styles.floatingFilterButton}
+          onPress={event => {
+            filterIconRef.current?.measureInWindow((x, y, width, height) => {
+              setFilterDropdownPosition({ left: x + width / 2, top: y + height });
+            });
+            setFilterDropdownVisible((v) => !v);
+          }}
+        >
+          <Ionicons name="filter-outline" size={22} color="#4B9EFF" />
+        </TouchableOpacity>
+        {filterDropdownVisible && filterDropdownPosition && (
+          <View style={[styles.filterDropdownBare, {
+            position: 'absolute',
+            right: 8,
+            top: filterDropdownPosition.top + 6,
+          }]}
+          >
+            <View style={styles.filterDropdownTightContainer}>
+              {[{ key: 'all', label: 'All' }, { key: 'paid', label: 'Paid' }, { key: 'unpaid', label: 'Unpaid' }].map(option => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.filterDropdownBareItem,
+                    studentFilter === option.key && styles.filterDropdownBareItemSelected,
+                  ]}
+                  onPress={() => {
+                    setStudentFilter(option.key as any);
+                    setFilterDropdownVisible(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.filterDropdownBareText,
+                    studentFilter === option.key && styles.filterDropdownBareTextSelected,
+                  ]}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Student List */}
       <FlatList
-        data={students}
+        data={filteredStudents}
         renderItem={renderStudentCard}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
@@ -343,6 +434,9 @@ export default function Add() {
             <Text style={styles.emptyText}>No students added yet</Text>
             <Text style={styles.emptySubtext}>Tap the Add button to add a new student</Text>
           </View>
+        }
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       />
 
@@ -592,47 +686,16 @@ export default function Add() {
       </Modal>
 
       {/* Hostel Selection Modal */}
-      <Modal
+      <HostelSelectorModal
         visible={isHostelDropdownOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsHostelDropdownOpen(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsHostelDropdownOpen(false)}
-        >
-          <View style={styles.dropdownList}>
-            {hostels.map((hostel) => (
-              <TouchableOpacity
-                key={hostel.id}
-                style={[
-                  styles.dropdownItem,
-                  selectedHostelId === hostel.id && styles.dropdownItemSelected
-                ]}
-                onPress={() => {
-                  setSelectedHostelId(hostel.id);
-                  setFormData(prev => ({ ...prev, hostelId: hostel.id, roomId: '' }));
-                  setIsHostelDropdownOpen(false);
-                }}
-              >
-                <Ionicons 
-                  name="business-outline" 
-                  size={16} 
-                  color={selectedHostelId === hostel.id ? "#4B9EFF" : "#6B7280"} 
-                />
-                <Text style={[
-                  styles.dropdownItemText,
-                  selectedHostelId === hostel.id && styles.dropdownItemTextSelected
-                ]}>
-                  {hostel.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setIsHostelDropdownOpen(false)}
+        hostels={hostels}
+        selectedHostelId={selectedHostelId}
+        onSelect={(id) => {
+          setSelectedHostelId(id);
+          setFormData(prev => ({ ...prev, hostelId: id }));
+        }}
+      />
 
       {/* Sharing Type Modal */}
       <Modal
@@ -705,10 +768,7 @@ const styles = StyleSheet.create({
     color: '#4B9EFF',
     fontWeight: '500',
     marginHorizontal: 6,
-  },
-  searchButton: {
-    padding: 8,
-    marginLeft: 8,
+    maxWidth: 120,
   },
   addStudentButton: {
     flexDirection: 'row',
@@ -718,12 +778,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginLeft: 8,
+    marginRight: 8,
+    height: 40,
   },
   addStudentButtonText: {
     color: '#4B9EFF',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  addStudentButtonIcon: {
+    marginLeft: 6,
   },
   listContainer: {
     padding: 16,
@@ -1048,5 +1113,65 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     flex: 1,
+  },
+  floatingFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F2FF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    height: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 100,
+  },
+  filterDropdownBare: {
+    zIndex: 1000,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    minWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  filterDropdownBareItem: {
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+  },
+  filterDropdownBareText: {
+    fontSize: 15,
+    color: '#1F2937',
+    textAlign: 'center',
+    backgroundColor: 'transparent',
+    fontWeight: '400',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  filterDropdownBareTextSelected: {
+    color: '#4B9EFF',
+    fontWeight: 'bold',
+  },
+  filterDropdownBareItemSelected: {
+    backgroundColor: '#E8F2FF',
+    borderRadius: 8,
+  },
+  filterDropdownTightContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 3,
+    minWidth: 0,
+    width: 'auto',
   },
 }); 

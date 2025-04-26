@@ -1,7 +1,6 @@
 export type HostelGender = 'gents' | 'ladies' | 'coliving';
 
-export type SharingType = 'single' | 'double' | 'triple' | 'quad' | 'other'; 
-// you can map 'double' = 2-share, 'triple' = 3-share, etc.
+export type SharingType = 'single' | 'double' | 'triple' | 'quad' | 'other';
 
 export interface OwnerSettings {
   language: string;
@@ -14,7 +13,7 @@ export interface Room {
   roomNumber: string;
   type: string;
   capacity: number;
-  sharingType: SharingType; // ⬅️ New Field Added Here
+  sharingType: SharingType;
   students: string[];
   isFull: boolean;
 }
@@ -55,6 +54,12 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface RecentActivity {
+  text: string;    // Example: "Amit Verma paid ₹6000 for Room 102"
+  icon: string;    // Example: "payment" or "join"
+  createdAt: string; // ISO date string
+}
+
 export interface Hostel {
   name: string;
   location: string;
@@ -69,6 +74,9 @@ export interface Hostel {
   };
   notifications: {
     [key: string]: Notification;
+  };
+  recentActivities: {
+    [key: string]: RecentActivity;
   };
 }
 

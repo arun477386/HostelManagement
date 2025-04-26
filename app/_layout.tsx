@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '../services/AuthContext';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { View, ActivityIndicator } from 'react-native';
 import { useEffect, useState } from 'react';
+import { ActivityProvider } from '../context/ActivityContext';
 
 function RootLayoutNav() {
   const { loading, user } = useAuth();
@@ -49,10 +50,12 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-          <StatusBar style="dark" />
-          <RootLayoutNav />
-        </SafeAreaView>
+        <ActivityProvider>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+            <StatusBar style="dark" />
+            <RootLayoutNav />
+          </SafeAreaView>
+        </ActivityProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

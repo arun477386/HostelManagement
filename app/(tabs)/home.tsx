@@ -1,13 +1,17 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Modal, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { auth } from '../../services/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { useHostelStore } from '../../services/hostelStore';
 import { useState, useEffect } from 'react';
-import { getOwnerDocument } from '../../services/firestoreService';
+import { getOwnerDocument, addRecentActivity, getRecentActivities } from '../../services/firestoreService';
 import { Owner } from '../../types/hostelSchema';
 import { useHostelFinanceData } from '../../hooks/useHostelFinanceData';
 import { getStudentPaidStatus } from '../../utils/finance';
+import { format } from 'date-fns';
+import { useActivityContext } from '../../services/ActivityContext';
+import { useRouter } from 'expo-router';
+import HostelSelectorModal from '../../components/HostelSelectorModal';
 
 interface Hostel {
   id: string;
@@ -120,6 +124,18 @@ function calculateHostelFinanceData(students: Record<string, any>) {
   return { amountCollected, pendingFees };
 }
 
+// Helper to get icon and color based on activity type
+const getActivityIconAndColor = (type: string) => {
+  switch (type) {
+    case 'student_added':
+      return { icon: 'person-add-outline', color: '#10B981' };
+    case 'hostel_added':
+      return { icon: 'business-outline', color: '#4B9EFF' };
+    default:
+      return { icon: 'information-circle-outline', color: '#6B7280' };
+  }
+};
+
 export default function Home() {
   const ownerName = "Ravi"; // This would come from your auth/user context
   const { selectedHostelId, setSelectedHostelId } = useHostelStore();
@@ -128,75 +144,101 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const { amountCollected, pendingFees, loading: financeLoading, error: financeError } = useHostelFinanceData(selectedHostelId);
   const [dueStudents, setDueStudents] = useState<{ name: string; room: string; feeAmount: number }[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const { refreshKey } = useActivityContext();
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const todayStr = format(new Date(), 'EEE, dd MMM yyyy');
+
+  // Move fetchHostels out of useEffect
+  const fetchHostels = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ownerDoc = await getOwnerDocument(user.uid);
+      if (!ownerDoc) return;
+      const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
+        id,
+        name: hostel.name,
+        totalStudents: Object.keys(hostel.students || {}).length,
+        duesToday: calculateDuesToday(hostel),
+        pendingFees: calculatePendingFees(hostel),
+        newJoins: calculateNewJoins(hostel),
+        vacantRooms: calculateVacantRooms(hostel),
+        overduePayments: calculateOverduePayments(hostel),
+      })) as Hostel[];
+      if (hostelsArray.length > 0) {
+        setSelectedHostelId(hostelsArray[0].id);
+      }
+      setHostels([{ id: 'all', name: 'All Hostels' } as AllHostelsOption, ...hostelsArray]);
+    } catch (error) {
+      console.error('Error fetching hostels:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Move fetchDueStudents out of useEffect
+  const fetchDueStudents = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ownerDoc = await getOwnerDocument(user.uid);
+      if (!ownerDoc) return;
+      let students: Record<string, any> = {};
+      if (selectedHostelId === 'all') {
+        Object.values(ownerDoc.hostels || {}).forEach((hostel: any) => {
+          students = { ...students, ...(hostel.students || {}) };
+        });
+      } else {
+        const hostel = ownerDoc.hostels[selectedHostelId];
+        students = hostel ? hostel.students || {} : {};
+      }
+      const dueList = Object.values(students)
+        .filter((student: any) => getStudentPaidStatus(student) === 'Unpaid')
+        .map((student: any) => ({
+          name: student.fullName,
+          room: student.roomId,
+          feeAmount: student.feeAmount,
+        }));
+      setDueStudents(dueList);
+    } catch {
+      setDueStudents([]);
+    }
+  };
+
+  // Move fetchActivities out of useEffect
+  const fetchActivities = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const recentActivities = await getRecentActivities(user.uid);
+      if (!recentActivities || recentActivities.length === 0) {
+        setActivities([]);
+      } else {
+        setActivities(recentActivities);
+      }
+    } catch (error) {
+      setActivities([]);
+      console.error('Error fetching activities:', error);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchHostels = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const ownerDoc = await getOwnerDocument(user.uid);
-        if (!ownerDoc) return;
-
-        // Convert hostels object to array format with stats
-        const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
-          id,
-          name: hostel.name,
-          totalStudents: Object.keys(hostel.students || {}).length,
-          duesToday: calculateDuesToday(hostel),
-          pendingFees: calculatePendingFees(hostel),
-          newJoins: calculateNewJoins(hostel),
-          vacantRooms: calculateVacantRooms(hostel),
-          overduePayments: calculateOverduePayments(hostel),
-        })) as Hostel[];
-
-        // Set the first hostel as default if available
-        if (hostelsArray.length > 0) {
-          setSelectedHostelId(hostelsArray[0].id);
-        }
-
-        // Add "All Hostels" option
-        setHostels([{ id: 'all', name: 'All Hostels' } as AllHostelsOption, ...hostelsArray]);
-      } catch (error) {
-        console.error('Error fetching hostels:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchHostels();
   }, []);
 
   useEffect(() => {
-    const fetchDueStudents = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-        const ownerDoc = await getOwnerDocument(user.uid);
-        if (!ownerDoc) return;
-        let students: Record<string, any> = {};
-        if (selectedHostelId === 'all') {
-          Object.values(ownerDoc.hostels || {}).forEach((hostel: any) => {
-            students = { ...students, ...(hostel.students || {}) };
-          });
-        } else {
-          const hostel = ownerDoc.hostels[selectedHostelId];
-          students = hostel ? hostel.students || {} : {};
-        }
-        const dueList = Object.values(students)
-          .filter((student: any) => getStudentPaidStatus(student) === 'Unpaid')
-          .map((student: any) => ({
-            name: student.fullName,
-            room: student.roomId,
-            feeAmount: student.feeAmount,
-          }));
-        setDueStudents(dueList);
-      } catch {
-        setDueStudents([]);
-      }
-    };
     fetchDueStudents();
   }, [selectedHostelId, loading]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [refreshKey]);
 
   // Calculate stats based on selected hostel
   const calculateStats = () => {
@@ -245,12 +287,6 @@ export default function Home() {
   const selectedHostel = hostels.find(h => h.id === selectedHostelId) || hostels[0];
   const { totalCollected, totalPending } = calculateAmountStats(hostels, selectedHostelId);
 
-  const recentActivities = [
-    { type: 'payment', text: 'Ravi paid ₹6000 for Room 202', time: '2h ago' },
-    { type: 'join', text: 'Preeti joined Shanti PG', time: 'yesterday' },
-    { type: 'room', text: 'Room 101 marked full', time: '3d ago' }
-  ];
-
   const notifications = [
     { type: 'warning', text: '5 students have not paid May rent' },
     { type: 'calendar', text: 'License expires on June 10' },
@@ -266,23 +302,45 @@ export default function Home() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Re-fetch hostels
+      await fetchHostels();
+      // Re-fetch due students
+      await fetchDueStudents();
+      // Re-fetch activities
+      await fetchActivities();
+    } catch (e) {
+      // Optionally handle error
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <ScrollView 
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={loading || financeLoading} onRefresh={() => {}} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
       {/* Header: Owner Summary */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
+        <View style={styles.headerContentFlex}>
           {!loading && (
             <TouchableOpacity 
               style={styles.hostelSelector}
               onPress={() => setIsDropdownOpen(!isDropdownOpen)}
             >
               <Ionicons name="business-outline" size={16} color="#4B9EFF" />
-              <Text style={styles.hostelText}>{selectedHostel?.name || 'All Hostels'}</Text>
+              <Text
+                style={styles.hostelText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {selectedHostel?.name || 'All Hostels'}
+              </Text>
               <Ionicons 
                 name={isDropdownOpen ? "chevron-up" : "chevron-down"} 
                 size={16} 
@@ -291,15 +349,12 @@ export default function Home() {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity onPress={() => router.push('/profile')}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/40' }}
-            style={styles.profileImage}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Ionicons name="notifications-outline" size={24} color="#4B9EFF" />
-        </TouchableOpacity>
+        <View style={styles.headerRightRowSmall}>
+          <Text style={styles.dateText}>{todayStr}</Text>
+          <TouchableOpacity style={styles.notificationButton}>
+            <Ionicons name="notifications-outline" size={24} color="#4B9EFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Amount & Pending Fees Card */}
@@ -319,78 +374,46 @@ export default function Home() {
         {financeError ? <Text style={{ color: 'red', textAlign: 'center', marginTop: 8 }}>{financeError}</Text> : null}
       </View>
 
-      <Modal
+      <HostelSelectorModal
         visible={isDropdownOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsDropdownOpen(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsDropdownOpen(false)}
-        >
-          <View style={styles.dropdownList}>
-            {hostels.map((hostel) => (
-              <TouchableOpacity
-                key={hostel.id}
-                style={[
-                  styles.dropdownItem,
-                  selectedHostelId === hostel.id && styles.dropdownItemSelected
-                ]}
-                onPress={() => {
-                  setSelectedHostelId(hostel.id);
-                  setIsDropdownOpen(false);
-                }}
-              >
-                <Ionicons 
-                  name="business-outline" 
-                  size={16} 
-                  color={selectedHostelId === hostel.id ? "#4B9EFF" : "#6B7280"} 
-                />
-                <Text style={[
-                  styles.dropdownItemText,
-                  selectedHostelId === hostel.id && styles.dropdownItemTextSelected
-                ]}>
-                  {hostel.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setIsDropdownOpen(false)}
+        hostels={hostels}
+        selectedHostelId={selectedHostelId}
+        onSelect={setSelectedHostelId}
+      />
 
-      {/* Dashboard Cards Grid */}
-      <View style={styles.dashboardTableContainer}>
-        <View style={styles.dashboardTableRow}>
-          <View style={[styles.tableCell, styles.tableCellRightBorder]}>
-            <Ionicons name="people-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
-            <Text style={styles.tableValue}>{stats.totalStudents}</Text>
-            <Text style={styles.tableLabel}>Active Students</Text>
+      {/* Dashboard Cards Horizontal Scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dashboardRowContainer}
+        style={{ marginTop: 18, marginBottom: 8 }}
+      >
+        <View style={styles.dashboardRow}>
+          <View style={styles.hCard}>
+            <Ionicons name="people-outline" size={22} color="#4B9EFF" style={styles.hCardIcon} />
+            <Text style={styles.hCardValue}>{stats.totalStudents}</Text>
+            <Text style={styles.hCardLabel}>Active Students</Text>
           </View>
-          <View style={styles.tableCell}>
-            <Ionicons name="person-add-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
-            <Text style={styles.tableValue}>{stats.newJoins}</Text>
-            <Text style={styles.tableLabel}>New Joins</Text>
+          <View style={styles.hCard}>
+            <Ionicons name="person-add-outline" size={22} color="#4B9EFF" style={styles.hCardIcon} />
+            <Text style={styles.hCardValue}>{stats.newJoins}</Text>
+            <Text style={styles.hCardLabel}>New Joins</Text>
           </View>
-        </View>
-        <View style={styles.dashboardTableRow}>
-          {selectedHostelId === 'all' ? (
-            <View style={[styles.tableCell, styles.tableCellRightBorder]}>
-              <Ionicons name="business-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
-              <Text style={styles.tableValue}>{stats.totalHostels}</Text>
-              <Text style={styles.tableLabel}>Total Hostels</Text>
+          {selectedHostelId === 'all' && (
+            <View style={styles.hCard}>
+              <Ionicons name="business-outline" size={22} color="#4B9EFF" style={styles.hCardIcon} />
+              <Text style={styles.hCardValue}>{stats.totalHostels}</Text>
+              <Text style={styles.hCardLabel}>Total Hostels</Text>
             </View>
-          ) : (
-            <View style={[styles.tableCell, styles.tableCellRightBorder, { backgroundColor: 'transparent', borderRightWidth: 0 }]} />
           )}
-          <View style={styles.tableCell}>
-            <Ionicons name="bed-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
-            <Text style={styles.tableValue}>{stats.vacantRooms}</Text>
-            <Text style={styles.tableLabel}>Vacant Rooms</Text>
+          <View style={styles.hCard}>
+            <Ionicons name="bed-outline" size={22} color="#4B9EFF" style={styles.hCardIcon} />
+            <Text style={styles.hCardValue}>{stats.vacantRooms}</Text>
+            <Text style={styles.hCardLabel}>Vacant Rooms</Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Due Payments */}
       <View style={styles.section}>
@@ -411,23 +434,35 @@ export default function Home() {
 
       {/* Recent Activity Feed */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <TouchableOpacity onPress={() => router.push('/recent-activities')}>
+            <Text style={styles.seeAllText}>See All ({activities.length})</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.activityList}>
-          {recentActivities.map((activity, index) => (
-            <View key={index} style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: getActivityColor(activity.type) }]}>
-                <Ionicons 
-                  name={getActivityIcon(activity.type)} 
-                  size={16} 
-                  color="white" 
-                />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>{activity.text}</Text>
-                <Text style={styles.activityTime}>{activity.time}</Text>
-              </View>
-            </View>
-          ))}
+          {loadingActivities ? (
+            <ActivityIndicator color="#4B9EFF" />
+          ) : activities.length === 0 ? (
+            <Text style={styles.emptyText}>No recent activity</Text>
+          ) : (
+            activities.slice(0, 3).map((activity, index) => {
+              const { icon, color } = getActivityIconAndColor(activity.type);
+              return (
+                <View key={activity.id || index} style={styles.activityItem}>
+                  <View style={[styles.activityIcon, { backgroundColor: color }]}> 
+                    <Ionicons name={icon as any} size={16} color="white" />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityText}>{activity.message}</Text>
+                    <Text style={styles.activityTime}>
+                      {format(new Date(activity.createdAt), 'MMM dd, h:mm a')}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
       </View>
 
@@ -512,12 +547,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  headerContent: {
+  headerContentFlex: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
   },
   notificationButton: {
     padding: 4,
-    marginLeft: 16,
+    marginLeft: 0,
   },
   profileImage: {
     width: 40,
@@ -538,50 +576,55 @@ const styles = StyleSheet.create({
     color: '#4B9EFF',
     fontWeight: '500',
     marginHorizontal: 6,
+    maxWidth: 180,
+    flexShrink: 1,
   },
-  dashboardTableContainer: {
-    backgroundColor: '#F6FAFF',
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginTop: 18,
-    marginBottom: 8,
-    paddingVertical: 8,
-    shadowColor: '#4B9EFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  dashboardTableRow: {
+  headerRightRowSmall: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E3EFFF',
-  },
-  tableCell: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+    minWidth: 0,
+    maxWidth: 120,
   },
-  tableCellRightBorder: {
-    borderRightWidth: 1,
-    borderRightColor: '#E3EFFF',
+  dateText: {
+    fontSize: 11,
+    color: '#4B9EFF',
+    fontWeight: '500',
+    marginRight: 4,
+    flexShrink: 1,
   },
-  tableCellFullWidth: {
-    flex: 1,
-    borderBottomWidth: 0,
+  dashboardRowContainer: {
+    paddingHorizontal: 16,
   },
-  tableIcon: {
-    marginBottom: 2,
+  dashboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  tableValue: {
-    fontSize: 16,
+  hCard: {
+    backgroundColor: '#F6FAFF',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    marginRight: 8,
+    shadowColor: '#4B9EFF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    minWidth: 60,
+  },
+  hCardIcon: {
+    marginBottom: 0,
+  },
+  hCardValue: {
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 2,
+    marginBottom: 0,
   },
-  tableLabel: {
-    fontSize: 12,
+  hCardLabel: {
+    fontSize: 9,
     color: '#6B7280',
   },
   section: {
@@ -605,14 +648,15 @@ const styles = StyleSheet.create({
   activityList: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 0,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    marginBottom: 0,
   },
   activityIcon: {
     width: 32,
