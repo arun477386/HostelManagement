@@ -8,7 +8,7 @@ import { createStudent, getOwnerDocument, addRecentActivity, getRecentActivities
 import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firestoreService';
 import { useHostelStore } from '../../services/hostelStore';
-import { Student as SchemaStudent, CustomCharge as SchemaCustomCharge } from '../../types/hostelSchema';
+import { Student as SchemaStudent } from '../../types/hostelSchema';
 import { differenceInMonths, parseISO, format } from 'date-fns';
 import { getStudentPaidStatus } from '../../utils/finance';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,16 +16,12 @@ import React from 'react';
 import { useActivityContext } from '../../services/ActivityContext';
 import HostelSelectorModal from '../../components/HostelSelectorModal';
 import { useToast } from '../../contexts/ToastContext';
+import { useAppData } from '../../contexts/AppDataContext';
 
 type SharingType = '1' | '2' | '3' | '4' | '5' | 'other';
 
 interface Student extends SchemaStudent {
   id: string;
-}
-
-interface CustomCharge {
-  label: string;
-  amount: string;
 }
 
 interface FormData {
@@ -57,8 +53,7 @@ export default function Add() {
   const [isHostelDropdownOpen, setIsHostelDropdownOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSharingDropdownOpen, setIsSharingDropdownOpen] = useState(false);
-  const [hostels, setHostels] = useState<{ id: string; name: string }[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const { hostels: rawHostels, students } = useAppData();
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
@@ -80,85 +75,8 @@ export default function Add() {
   const [filterDropdownPosition, setFilterDropdownPosition] = useState<{ left: number; top: number } | null>(null);
   const { showToast } = useToast();
 
-  const fetchHostels = async () => {
-    try {
-      if (!user) return;
-      const ownerDoc = await getOwnerDocument(user.uid);
-      if (!ownerDoc) return;
-      const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
-        id,
-        name: hostel.name,
-      }));
-      setHostels(hostelsArray);
-      // Set first hostel as default if none is selected
-      if (hostelsArray.length > 0 && (!selectedHostelId || selectedHostelId === 'all')) {
-        const firstHostelId = hostelsArray[0].id;
-        setSelectedHostelId(firstHostelId);
-        setFormData(prev => ({ ...prev, hostelId: firstHostelId }));
-      }
-    } catch (error) {
-      // Error handling
-    }
-  };
-
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchHostels();
-    }, [user])
-  );
-
-  useEffect(() => {
-    fetchHostels();
-  }, [user]);
-
-  const fetchStudents = async () => {
-    if (!user || !selectedHostelId || selectedHostelId === 'all') {
-      setStudents([]);
-      return;
-    }
-
-    try {
-      const ownerDoc = await getOwnerDocument(user.uid);
-      if (!ownerDoc) {
-        setStudents([]);
-        return;
-      }
-
-      const hostel = ownerDoc.hostels[selectedHostelId];
-      if (!hostel) {
-        setStudents([]);
-        return;
-      }
-
-      // Convert students object to array
-      const studentsData = Object.entries(hostel.students || {}).map(([id, student]) => ({
-        id,
-        ...student
-      })) as Student[];
-      
-      setStudents(studentsData);
-    } catch (error) {
-      setStudents([]);
-    }
-  };
-
-  useEffect(() => {
-    fetchStudents();
-  }, [user, selectedHostelId]);
-
-  const handleAddCharge = () => {
-    setFormData(prev => ({
-      ...prev,
-      customCharges: [...prev.customCharges, { label: '', amount: '' }]
-    }));
-  };
-
-  const handleRemoveCharge = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      customCharges: prev.customCharges.filter((_, i) => i !== index)
-    }));
-  };
+  // Map hostels to always include id and name for UI
+  const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
 
   const resetForm = () => {
     setFormData({
@@ -173,12 +91,6 @@ export default function Add() {
     });
     setErrors({});
   };
-
-  useEffect(() => {
-    return () => {
-      resetForm();
-    };
-  }, []);
 
   const handleSubmit = async () => {
     // Validate form
@@ -251,7 +163,6 @@ export default function Add() {
       setIsAddModalVisible(false);
 
       // Refresh data
-      await fetchStudents();
       triggerRefresh();
 
       // Add activity with proper data structure
@@ -350,14 +261,7 @@ export default function Add() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try {
-      await fetchHostels();
-      await fetchStudents();
-    } catch (e) {
-      // Optionally handle error
-    } finally {
-      setRefreshing(false);
-    }
+    setRefreshing(false);
   };
 
   return (

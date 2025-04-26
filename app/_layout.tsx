@@ -6,6 +6,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useEffect, useState } from 'react';
 import { ActivityProvider } from '../context/ActivityContext';
 import { ToastProvider } from '../contexts/ToastContext';
+import { AppDataProvider } from '../contexts/AppDataContext';
 
 function RootLayoutNav() {
   const { loading, user } = useAuth();
@@ -53,10 +54,12 @@ export default function RootLayout() {
       <AuthProvider>
         <ActivityProvider>
           <ToastProvider>
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-              <StatusBar style="dark" />
-              <RootLayoutNav />
-            </SafeAreaView>
+            <AppDataProvider>
+              <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+                <StatusBar style="dark" />
+                <RootLayoutNav />
+              </SafeAreaView>
+            </AppDataProvider>
           </ToastProvider>
         </ActivityProvider>
       </AuthProvider>

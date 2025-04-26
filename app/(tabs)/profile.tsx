@@ -6,6 +6,7 @@ import { signOut } from 'firebase/auth';
 import { useAuth } from '../../services/AuthContext';
 import { useState, useEffect } from 'react';
 import { getOwnerDocument } from '../../services/firestoreService';
+import { useAppData } from '../../contexts/AppDataContext';
 
 const ProfileImage = ({ photoUrl, fullName }: { photoUrl: string; fullName: string }) => {
   if (photoUrl && photoUrl !== 'https://via.placeholder.com/80') {
@@ -28,39 +29,7 @@ const ProfileImage = ({ photoUrl, fullName }: { photoUrl: string; fullName: stri
 
 export default function Profile() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [ownerData, setOwnerData] = useState<{
-    fullName: string;
-    email: string;
-    phone: string;
-    photoUrl: string;
-  }>({
-    fullName: '',
-    email: '',
-    phone: '',
-    photoUrl: '',
-  });
-
-  useEffect(() => {
-    const fetchOwnerData = async () => {
-      try {
-        if (!user) return;
-        const ownerDoc = await getOwnerDocument(user.uid);
-        if (ownerDoc) {
-          setOwnerData({
-            fullName: ownerDoc.fullName || '',
-            email: ownerDoc.email || user.email || '',
-            phone: ownerDoc.phone || '',
-            photoUrl: ownerDoc.photoUrl || 'https://via.placeholder.com/80',
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching owner data:', error);
-      }
-    };
-
-    fetchOwnerData();
-  }, [user]);
+  const { owner } = useAppData();
 
   const handleManageHostels = () => {
     router.push('/hostels');
@@ -91,11 +60,11 @@ export default function Profile() {
       {/* Profile Header Section */}
       <View style={styles.headerContainer}>
         <View style={styles.profileImageContainer}>
-          <ProfileImage photoUrl={ownerData.photoUrl} fullName={ownerData.fullName} />
+          <ProfileImage photoUrl={owner?.photoUrl || ''} fullName={owner?.fullName || ''} />
         </View>
-        <Text style={styles.name}>{ownerData.fullName}</Text>
-        <Text style={styles.email}>{ownerData.email}</Text>
-        <Text style={styles.phone}>{ownerData.phone}</Text>
+        <Text style={styles.name}>{owner?.fullName || ''}</Text>
+        <Text style={styles.email}>{owner?.email || ''}</Text>
+        <Text style={styles.phone}>{owner?.phone || ''}</Text>
       </View>
 
       {/* Manage Settings Section */}

@@ -6,6 +6,7 @@ import { useHostelStore } from '../../services/hostelStore';
 import { useAuth } from '../../services/AuthContext';
 import { getStudentPaidStatus } from '../../utils/finance';
 import { useToast } from '../../contexts/ToastContext';
+import { useAppData } from '../../contexts/AppDataContext';
 
 interface Hostel {
   id: string;
@@ -19,29 +20,13 @@ interface Hostel {
 }
 
 export default function HostelsScreen() {
-  const { user } = useAuth();
-  const hostels = useHostelStore(state => state.hostels);
-  const fetchHostels = useHostelStore(state => state.fetchHostels);
+  const { hostels: rawHostels, loading } = useAppData();
   const setSelectedHostelId = useHostelStore(state => state.setSelectedHostelId);
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    const load = async () => {
-      if (user) {
-        setLoading(true);
-        try {
-          await fetchHostels(user.uid);
-        } catch (error) {
-          showToast('Failed to load hostels. Please try again.', 'error');
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    load();
-  }, [user, fetchHostels]);
+  // Map hostels to always include id and name for UI
+  const hostels = (rawHostels || []).map((h: any) => ({ ...h, id: h.id, name: h.name }));
 
   const renderHostelCard = ({ item }: { item: Hostel }) => {
     // Calculate dynamic values

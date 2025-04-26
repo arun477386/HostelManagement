@@ -7,6 +7,7 @@ import { getRecentActivities } from '../services/firestoreService';
 import { format } from 'date-fns';
 import { useHostelStore } from '../services/hostelStore';
 import HostelSelectorModal from '../components/HostelSelectorModal';
+import { useAppData } from '../contexts/AppDataContext';
 
 // Helper to get icon and color based on activity type
 const getActivityIconAndColor = (type: string) => {
@@ -22,7 +23,8 @@ const getActivityIconAndColor = (type: string) => {
 
 export default function RecentActivitiesScreen() {
   const { user } = useAuth();
-  const hostels = useHostelStore(state => state.hostels);
+  const { hostels: rawHostels } = useAppData();
+  const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -65,7 +67,7 @@ export default function RecentActivitiesScreen() {
       <HostelSelectorModal
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
-        hostels={[{ id: 'all', name: 'All Hostels' }, ...hostels]}
+        hostels={hostels}
         selectedHostelId={selectedHostelId}
         onSelect={setSelectedHostelId}
       />

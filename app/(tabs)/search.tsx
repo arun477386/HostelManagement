@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { getOwnerDocument } from '../../services/firestoreService';
 import { getStudentPaidStatus } from '../../utils/finance';
 import { useRouter } from 'expo-router';
+import { useAppData } from '../../contexts/AppDataContext';
 
 interface Student {
   id: string;
@@ -27,84 +28,14 @@ interface HostelOption {
 export default function SearchScreen() {
   const { user } = useAuth();
   const { selectedHostelId, setSelectedHostelId } = useHostelStore();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { students, hostels: rawHostels, loading } = useAppData();
   const [searchQuery, setSearchQuery] = useState('');
   const [isHostelDropdownOpen, setIsHostelDropdownOpen] = useState(false);
   const { showToast } = useToast();
-  const [hostels, setHostels] = useState<HostelOption[]>([{ id: 'all', name: 'All Hostels' }]);
-  const [hostelsLoading, setHostelsLoading] = useState(true);
   const router = useRouter();
 
-  const fetchStudents = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const ownerDoc = await getOwnerDocument(user.uid);
-      if (!ownerDoc) return;
-
-      let allStudents: Student[] = [];
-      
-      // If a specific hostel is selected, only fetch from that hostel
-      if (selectedHostelId !== 'all') {
-        const hostel = ownerDoc.hostels[selectedHostelId];
-        if (hostel?.students) {
-          allStudents = Object.entries(hostel.students).map(([id, student]: any) => ({
-            id,
-            fullName: student.fullName,
-            phone: student.phone,
-            joinDate: student.joinDate,
-            hostelId: selectedHostelId,
-            roomId: student.roomId,
-          }));
-        }
-      } else {
-        // Fetch from all hostels
-        Object.entries(ownerDoc.hostels || {}).forEach(([hostelId, hostel]: any) => {
-          if (hostel.students) {
-            const hostelStudents = Object.entries(hostel.students).map(([id, student]: any) => ({
-              id,
-              fullName: student.fullName,
-              phone: student.phone,
-              joinDate: student.joinDate,
-              hostelId,
-              roomId: student.roomId,
-            }));
-            allStudents = [...allStudents, ...hostelStudents];
-          }
-        });
-      }
-
-      setStudents(allStudents);
-    } catch (error) {
-      showToast('Failed to load students', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch hostels on mount or when user changes
-  useEffect(() => {
-    const fetchHostels = async () => {
-      setHostelsLoading(true);
-      try {
-        if (!user) return;
-        const ownerDoc = await getOwnerDocument(user.uid);
-        if (!ownerDoc) return;
-        const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]: any) => ({ id, name: hostel.name }));
-        setHostels([{ id: 'all', name: 'All Hostels' }, ...hostelsArray]);
-      } catch (e) {
-        setHostels([{ id: 'all', name: 'All Hostels' }]);
-      } finally {
-        setHostelsLoading(false);
-      }
-    };
-    fetchHostels();
-  }, [user]);
-
-  useEffect(() => {
-    fetchStudents();
-  }, [user, selectedHostelId]);
+  // Map hostels to always include id and name for UI
+  const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
 
   const filteredStudents = students.filter(student => {
     const searchLower = searchQuery.toLowerCase();
@@ -206,11 +137,6 @@ export default function SearchScreen() {
           setIsHostelDropdownOpen(false);
         }}
       />
-      {isHostelDropdownOpen && hostelsLoading && (
-        <View style={{ position: 'absolute', top: 100, left: 0, right: 0, alignItems: 'center', zIndex: 1000 }}>
-          <ActivityIndicator size="small" color="#4B9EFF" />
-        </View>
-      )}
     </View>
   );
 }

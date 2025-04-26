@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { useActivityContext } from '../../services/ActivityContext';
 import { useRouter } from 'expo-router';
 import HostelSelectorModal from '../../components/HostelSelectorModal';
+import { useAppData } from '../../contexts/AppDataContext';
 
 interface Hostel {
   id: string;
@@ -140,105 +141,29 @@ export default function Home() {
   const ownerName = "Ravi"; // This would come from your auth/user context
   const { selectedHostelId, setSelectedHostelId } = useHostelStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [hostels, setHostels] = useState<(Hostel | AllHostelsOption)[]>([{ id: 'all', name: 'All Hostels' }]);
-  const [loading, setLoading] = useState(true);
+  const { hostels: rawHostels, students, activities, loading } = useAppData();
   const { amountCollected, pendingFees, loading: financeLoading, error: financeError } = useHostelFinanceData(selectedHostelId);
-  const [dueStudents, setDueStudents] = useState<{ name: string; room: string; feeAmount: number }[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(true);
   const { refreshKey } = useActivityContext();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const todayStr = format(new Date(), 'EEE, dd MMM yyyy');
 
-  // Move fetchHostels out of useEffect
-  const fetchHostels = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const ownerDoc = await getOwnerDocument(user.uid);
-      if (!ownerDoc) return;
-      const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
-        id,
-        name: hostel.name,
-        totalStudents: Object.keys(hostel.students || {}).length,
-        duesToday: calculateDuesToday(hostel),
-        pendingFees: calculatePendingFees(hostel),
-        newJoins: calculateNewJoins(hostel),
-        vacantRooms: calculateVacantRooms(hostel),
-        overduePayments: calculateOverduePayments(hostel),
-      })) as Hostel[];
-      if (hostelsArray.length > 0) {
-        setSelectedHostelId(hostelsArray[0].id);
-      }
-      setHostels([{ id: 'all', name: 'All Hostels' } as AllHostelsOption, ...hostelsArray]);
-    } catch (error) {
-      console.error('Error fetching hostels:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Move fetchDueStudents out of useEffect
-  const fetchDueStudents = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const ownerDoc = await getOwnerDocument(user.uid);
-      if (!ownerDoc) return;
-      let students: Record<string, any> = {};
-      if (selectedHostelId === 'all') {
-        Object.values(ownerDoc.hostels || {}).forEach((hostel: any) => {
-          students = { ...students, ...(hostel.students || {}) };
-        });
-      } else {
-        const hostel = ownerDoc.hostels[selectedHostelId];
-        students = hostel ? hostel.students || {} : {};
-      }
-      const dueList = Object.values(students)
-        .filter((student: any) => getStudentPaidStatus(student) === 'Unpaid')
-        .map((student: any) => ({
-          name: student.fullName,
-          room: student.roomId,
-          feeAmount: student.feeAmount,
-        }));
-      setDueStudents(dueList);
-    } catch {
-      setDueStudents([]);
-    }
-  };
-
-  // Move fetchActivities out of useEffect
-  const fetchActivities = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const recentActivities = await getRecentActivities(user.uid);
-      if (!recentActivities || recentActivities.length === 0) {
-        setActivities([]);
-      } else {
-        setActivities(recentActivities);
-      }
-    } catch (error) {
-      setActivities([]);
-      console.error('Error fetching activities:', error);
-    } finally {
-      setLoadingActivities(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHostels();
-  }, []);
-
-  useEffect(() => {
-    fetchDueStudents();
-  }, [selectedHostelId, loading]);
-
-  useEffect(() => {
-    fetchActivities();
-  }, [refreshKey]);
+  // Map hostels to add UI-calculated fields
+  const hostels = [
+    { id: 'all', name: 'All Hostels' },
+    ...rawHostels.map((hostel: any) => ({
+      ...hostel,
+      id: hostel.id,
+      name: hostel.name,
+      totalStudents: Object.keys(hostel.students || {}).length,
+      duesToday: calculateDuesToday(hostel),
+      pendingFees: calculatePendingFees(hostel),
+      newJoins: calculateNewJoins(hostel),
+      vacantRooms: calculateVacantRooms(hostel),
+      overduePayments: calculateOverduePayments(hostel),
+    }))
+  ];
 
   // Calculate stats based on selected hostel
   const calculateStats = () => {
@@ -287,6 +212,18 @@ export default function Home() {
   const selectedHostel = hostels.find(h => h.id === selectedHostelId) || hostels[0];
   const { totalCollected, totalPending } = calculateAmountStats(hostels, selectedHostelId);
 
+  // Derive dueStudents from students
+  const dueStudents = students
+    .filter((student: any) =>
+      (selectedHostelId === 'all' || student.hostelId === selectedHostelId) &&
+      getStudentPaidStatus(student) === 'Unpaid'
+    )
+    .map((student: any) => ({
+      name: student.fullName,
+      room: student.roomId,
+      feeAmount: student.feeAmount,
+    }));
+
   const notifications = [
     { type: 'warning', text: '5 students have not paid May rent' },
     { type: 'calendar', text: 'License expires on June 10' },
@@ -304,18 +241,8 @@ export default function Home() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try {
-      // Re-fetch hostels
-      await fetchHostels();
-      // Re-fetch due students
-      await fetchDueStudents();
-      // Re-fetch activities
-      await fetchActivities();
-    } catch (e) {
-      // Optionally handle error
-    } finally {
-      setRefreshing(false);
-    }
+    // Optionally, you can call refresh() from useAppData if you want to reload data
+    setRefreshing(false);
   };
 
   return (
@@ -441,9 +368,7 @@ export default function Home() {
           </TouchableOpacity>
         </View>
         <View style={styles.activityList}>
-          {loadingActivities ? (
-            <ActivityIndicator color="#4B9EFF" />
-          ) : activities.length === 0 ? (
+          {activities.length === 0 ? (
             <Text style={styles.emptyText}>No recent activity</Text>
           ) : (
             activities.slice(0, 3).map((activity, index) => {
