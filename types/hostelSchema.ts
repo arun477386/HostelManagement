@@ -1,5 +1,8 @@
 export type HostelGender = 'gents' | 'ladies' | 'coliving';
 
+export type SharingType = 'single' | 'double' | 'triple' | 'quad' | 'other'; 
+// you can map 'double' = 2-share, 'triple' = 3-share, etc.
+
 export interface OwnerSettings {
   language: string;
   currency: string;
@@ -11,6 +14,7 @@ export interface Room {
   roomNumber: string;
   type: string;
   capacity: number;
+  sharingType: SharingType; // ⬅️ New Field Added Here
   students: string[];
   isFull: boolean;
 }
@@ -85,4 +89,4 @@ export interface DatabaseSchema {
   owners: {
     [key: string]: Owner;
   };
-} 
+}

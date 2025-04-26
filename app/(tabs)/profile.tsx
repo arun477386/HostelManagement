@@ -1,9 +1,66 @@
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { auth } from '../../services/firebase';
+import { signOut } from 'firebase/auth';
+import { useAuth } from '../../services/AuthContext';
+import { useState, useEffect } from 'react';
+import { getOwnerDocument } from '../../services/firestoreService';
+
+const ProfileImage = ({ photoUrl, fullName }: { photoUrl: string; fullName: string }) => {
+  if (photoUrl && photoUrl !== 'https://via.placeholder.com/80') {
+    return (
+      <Image
+        source={{ uri: photoUrl }}
+        style={styles.profileImage}
+      />
+    );
+  }
+
+  const firstLetter = fullName ? fullName.charAt(0).toUpperCase() : '?';
+  
+  return (
+    <View style={[styles.profileImage, styles.letterAvatar]}>
+      <Text style={styles.letterAvatarText}>{firstLetter}</Text>
+    </View>
+  );
+};
 
 export default function Profile() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [ownerData, setOwnerData] = useState<{
+    fullName: string;
+    email: string;
+    phone: string;
+    photoUrl: string;
+  }>({
+    fullName: '',
+    email: '',
+    phone: '',
+    photoUrl: '',
+  });
+
+  useEffect(() => {
+    const fetchOwnerData = async () => {
+      try {
+        if (!user) return;
+        const ownerDoc = await getOwnerDocument(user.uid);
+        if (ownerDoc) {
+          setOwnerData({
+            fullName: ownerDoc.fullName || '',
+            email: ownerDoc.email || user.email || '',
+            phone: ownerDoc.phone || '',
+            photoUrl: ownerDoc.photoUrl || 'https://via.placeholder.com/80',
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching owner data:', error);
+      }
+    };
+
+    fetchOwnerData();
+  }, [user]);
 
   const handleManageHostels = () => {
     router.push('/hostels');
@@ -17,19 +74,28 @@ export default function Profile() {
     router.push('/change-password');
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      // Small delay to ensure proper navigation
+      setTimeout(() => {
+        router.replace('/signin');
+      }, 50);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header Section */}
       <View style={styles.headerContainer}>
         <View style={styles.profileImageContainer}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/80' }}
-            style={styles.profileImage}
-          />
+          <ProfileImage photoUrl={ownerData.photoUrl} fullName={ownerData.fullName} />
         </View>
-        <Text style={styles.name}>John Doe</Text>
-        <Text style={styles.email}>john.doe@example.com</Text>
-        <Text style={styles.phone}>+1 234 567 8900</Text>
+        <Text style={styles.name}>{ownerData.fullName}</Text>
+        <Text style={styles.email}>{ownerData.email}</Text>
+        <Text style={styles.phone}>{ownerData.phone}</Text>
       </View>
 
       {/* Manage Settings Section */}
@@ -99,7 +165,7 @@ export default function Profile() {
       </View>
 
       {/* Sign Out Button */}
-      <TouchableOpacity style={styles.signOutButton}>
+      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={24} color="#FF4C4C" />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
@@ -205,5 +271,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  letterAvatar: {
+    backgroundColor: '#4B9EFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  letterAvatarText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: 'bold',
   },
 }); 

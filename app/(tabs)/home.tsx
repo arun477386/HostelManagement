@@ -6,13 +6,128 @@ import { useHostelStore } from '../../services/hostelStore';
 import { useState, useEffect } from 'react';
 import { getOwnerDocument } from '../../services/firestoreService';
 import { Owner } from '../../types/hostelSchema';
+import { useHostelFinanceData } from '../../hooks/useHostelFinanceData';
+import { getStudentPaidStatus } from '../../utils/finance';
+
+interface Hostel {
+  id: string;
+  name: string;
+  totalStudents: number;
+  duesToday: number;
+  pendingFees: number;
+  newJoins: number;
+  vacantRooms: number;
+  overduePayments: number;
+}
+
+interface AllHostelsOption {
+  id: 'all';
+  name: 'All Hostels';
+}
+
+// Helper functions to calculate stats
+const calculateDuesToday = (hostel: any) => {
+  // Count students with fees due today
+  return Object.values(hostel.students || {}).reduce((count: number, student: any) => {
+    const dueDate = new Date(student.nextDueDate);
+    const today = new Date();
+    return count + (dueDate.toDateString() === today.toDateString() ? 1 : 0);
+  }, 0);
+};
+
+const calculatePendingFees = (hostel: any) => {
+  // Sum all pending fees
+  return Object.values(hostel.students || {}).reduce((sum: number, student: any) => {
+    return sum + (student.pendingFees || 0);
+  }, 0);
+};
+
+const calculateNewJoins = (hostel: any) => {
+  // Count students who joined in the last 7 days
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  return Object.values(hostel.students || {}).reduce((count: number, student: any) => {
+    const joinDate = new Date(student.joinDate);
+    return count + (joinDate >= oneWeekAgo ? 1 : 0);
+  }, 0);
+};
+
+const calculateVacantRooms = (hostel: any) => {
+  // Count rooms that are not full
+  return Object.values(hostel.rooms || {}).reduce((count: number, room: any) => {
+    return count + (!room.isFull ? 1 : 0);
+  }, 0);
+};
+
+const calculateOverduePayments = (hostel: any) => {
+  // Count students with overdue payments
+  const today = new Date();
+  return Object.values(hostel.students || {}).reduce((count: number, student: any) => {
+    const dueDate = new Date(student.nextDueDate);
+    return count + (dueDate < today ? 1 : 0);
+  }, 0);
+};
+
+// Helper to calculate total collected and pending fees
+const calculateAmountStats = (hostels: any[], selectedHostelId: string) => {
+  let totalCollected = 0;
+  let totalPending = 0;
+
+  const processStudentPayments = (students: any) => {
+    Object.values(students || {}).forEach((student: any) => {
+      if (student.payments) {
+        Object.values(student.payments).forEach((payment: any) => {
+          if (payment.status === 'paid') {
+            totalCollected += payment.amount || 0;
+          } else if (payment.status === 'unpaid') {
+            totalPending += payment.amount || 0;
+          }
+        });
+      }
+    });
+  };
+
+  if (selectedHostelId === 'all') {
+    hostels.forEach((hostel: any) => {
+      if (hostel.id !== 'all' && hostel.students) {
+        processStudentPayments(hostel.students);
+      }
+    });
+  } else {
+    const hostel = hostels.find((h: any) => h.id === selectedHostelId);
+    if (hostel && hostel.students) {
+      processStudentPayments(hostel.students);
+    }
+  }
+
+  return { totalCollected, totalPending };
+};
+
+// Helper to calculate finance data for a hostel
+function calculateHostelFinanceData(students: Record<string, any>) {
+  let amountCollected = 0;
+  let pendingFees = 0;
+  Object.values(students || {}).forEach((student: any) => {
+    Object.values(student.payments || {}).forEach((payment: any) => {
+      if (payment.status === 'paid') {
+        amountCollected += payment.amount || 0;
+      } else if (payment.status === 'unpaid') {
+        pendingFees += payment.dueAmount || 0;
+      }
+    });
+  });
+  return { amountCollected, pendingFees };
+}
 
 export default function Home() {
   const ownerName = "Ravi"; // This would come from your auth/user context
   const { selectedHostelId, setSelectedHostelId } = useHostelStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [hostels, setHostels] = useState<{ id: string; name: string }[]>([{ id: 'all', name: 'All Hostels' }]);
+  const [hostels, setHostels] = useState<(Hostel | AllHostelsOption)[]>([{ id: 'all', name: 'All Hostels' }]);
   const [loading, setLoading] = useState(true);
+  const { amountCollected, pendingFees, loading: financeLoading, error: financeError } = useHostelFinanceData(selectedHostelId);
+  const [dueStudents, setDueStudents] = useState<{ name: string; room: string; feeAmount: number }[]>([]);
 
   useEffect(() => {
     const fetchHostels = async () => {
@@ -23,14 +138,25 @@ export default function Home() {
         const ownerDoc = await getOwnerDocument(user.uid);
         if (!ownerDoc) return;
 
-        // Convert hostels object to array format
+        // Convert hostels object to array format with stats
         const hostelsArray = Object.entries(ownerDoc.hostels || {}).map(([id, hostel]) => ({
           id,
           name: hostel.name,
-        }));
+          totalStudents: Object.keys(hostel.students || {}).length,
+          duesToday: calculateDuesToday(hostel),
+          pendingFees: calculatePendingFees(hostel),
+          newJoins: calculateNewJoins(hostel),
+          vacantRooms: calculateVacantRooms(hostel),
+          overduePayments: calculateOverduePayments(hostel),
+        })) as Hostel[];
+
+        // Set the first hostel as default if available
+        if (hostelsArray.length > 0) {
+          setSelectedHostelId(hostelsArray[0].id);
+        }
 
         // Add "All Hostels" option
-        setHostels([{ id: 'all', name: 'All Hostels' }, ...hostelsArray]);
+        setHostels([{ id: 'all', name: 'All Hostels' } as AllHostelsOption, ...hostelsArray]);
       } catch (error) {
         console.error('Error fetching hostels:', error);
       } finally {
@@ -41,36 +167,83 @@ export default function Home() {
     fetchHostels();
   }, []);
 
+  useEffect(() => {
+    const fetchDueStudents = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+        const ownerDoc = await getOwnerDocument(user.uid);
+        if (!ownerDoc) return;
+        let students: Record<string, any> = {};
+        if (selectedHostelId === 'all') {
+          Object.values(ownerDoc.hostels || {}).forEach((hostel: any) => {
+            students = { ...students, ...(hostel.students || {}) };
+          });
+        } else {
+          const hostel = ownerDoc.hostels[selectedHostelId];
+          students = hostel ? hostel.students || {} : {};
+        }
+        const dueList = Object.values(students)
+          .filter((student: any) => getStudentPaidStatus(student) === 'Unpaid')
+          .map((student: any) => ({
+            name: student.fullName,
+            room: student.roomId,
+            feeAmount: student.feeAmount,
+          }));
+        setDueStudents(dueList);
+      } catch {
+        setDueStudents([]);
+      }
+    };
+    fetchDueStudents();
+  }, [selectedHostelId, loading]);
+
   // Calculate stats based on selected hostel
   const calculateStats = () => {
-    if (selectedHostelId === 'all') {
-      // Calculate totals across all hostels
+    try {
+      const selectedHostel = hostels.find(h => h.id === selectedHostelId);
+      if (!selectedHostel || selectedHostelId === 'all') {
+        // Calculate totals across all hostels
+        const allHostels = hostels.filter((h): h is Hostel => h.id !== 'all');
+        return {
+          totalHostels: allHostels.length,
+          totalStudents: allHostels.reduce((sum, h) => sum + h.totalStudents, 0),
+          duesToday: allHostels.reduce((sum, h) => sum + h.duesToday, 0),
+          pendingFees: allHostels.reduce((sum, h) => sum + h.pendingFees, 0),
+          newJoins: allHostels.reduce((sum, h) => sum + h.newJoins, 0),
+          vacantRooms: allHostels.reduce((sum, h) => sum + h.vacantRooms, 0),
+          overduePayments: allHostels.reduce((sum, h) => sum + h.overduePayments, 0)
+        };
+      } else {
+        const hostel = selectedHostel as Hostel;
+        // Get stats for selected hostel
+        return {
+          totalHostels: 1,
+          totalStudents: hostel.totalStudents,
+          duesToday: hostel.duesToday,
+          pendingFees: hostel.pendingFees,
+          newJoins: hostel.newJoins,
+          vacantRooms: hostel.vacantRooms,
+          overduePayments: hostel.overduePayments
+        };
+      }
+    } catch (error) {
+      // Return default values if there's an error
       return {
-        totalHostels: hostels.length - 1, // Subtract 1 for "All Hostels" option
-        totalStudents: 0, // TODO: Calculate from all hostels
-        duesToday: 0, // TODO: Calculate from all hostels
-        pendingFees: 0, // TODO: Calculate from all hostels
-        newJoins: 0, // TODO: Calculate from all hostels
-        vacantRooms: 0, // TODO: Calculate from all hostels
-        overduePayments: 0 // TODO: Calculate from all hostels
-      };
-    } else {
-      // Get stats for selected hostel
-      return {
-        totalHostels: 1,
-        totalStudents: 0, // TODO: Get from selected hostel
-        duesToday: 0, // TODO: Get from selected hostel
-        pendingFees: 0, // TODO: Get from selected hostel
-        newJoins: 0, // TODO: Get from selected hostel
-        vacantRooms: 0, // TODO: Get from selected hostel
-        overduePayments: 0 // TODO: Get from selected hostel
+        totalHostels: 0,
+        totalStudents: 0,
+        duesToday: 0,
+        pendingFees: 0,
+        newJoins: 0,
+        vacantRooms: 0,
+        overduePayments: 0
       };
     }
   };
 
   const stats = calculateStats();
-
   const selectedHostel = hostels.find(h => h.id === selectedHostelId) || hostels[0];
+  const { totalCollected, totalPending } = calculateAmountStats(hostels, selectedHostelId);
 
   const recentActivities = [
     { type: 'payment', text: 'Ravi paid ₹6000 for Room 202', time: '2h ago' },
@@ -97,7 +270,7 @@ export default function Home() {
     <ScrollView 
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={loading} onRefresh={() => {}} />
+        <RefreshControl refreshing={loading || financeLoading} onRefresh={() => {}} />
       }
     >
       {/* Header: Owner Summary */}
@@ -127,6 +300,23 @@ export default function Home() {
         <TouchableOpacity style={styles.notificationButton}>
           <Ionicons name="notifications-outline" size={24} color="#4B9EFF" />
         </TouchableOpacity>
+      </View>
+
+      {/* Amount & Pending Fees Card */}
+      <View style={styles.amountContainer}>
+        <View style={styles.amountRow}>
+          <View style={styles.amountCard}>
+            <Ionicons name="cash-outline" size={24} color="#4B9EFF" style={{ marginBottom: 6 }} />
+            <Text style={styles.amountTitle}>Amount Collected</Text>
+            <Text style={styles.amountValue}>₹{amountCollected}</Text>
+          </View>
+          <View style={styles.amountCard}>
+            <Ionicons name="wallet-outline" size={24} color="#FF4C4C" style={{ marginBottom: 6, marginRight: 4 }} />
+            <Text style={styles.amountTitle}>Pending Fees</Text>
+            <Text style={styles.amountValue}>₹{pendingFees}</Text>
+          </View>
+        </View>
+        {financeError ? <Text style={{ color: 'red', textAlign: 'center', marginTop: 8 }}>{financeError}</Text> : null}
       </View>
 
       <Modal
@@ -171,41 +361,52 @@ export default function Home() {
       </Modal>
 
       {/* Dashboard Cards Grid */}
-      <View style={styles.dashboardGrid}>
-        <View style={styles.card}>
-          <Ionicons name="people-outline" size={24} color="#4B9EFF" />
-          <Text style={styles.cardValue}>{stats.totalStudents}</Text>
-          <Text style={styles.cardTitle}>Active Students</Text>
-          <Text style={styles.cardTrend}>+4 this week 📈</Text>
+      <View style={styles.dashboardTableContainer}>
+        <View style={styles.dashboardTableRow}>
+          <View style={[styles.tableCell, styles.tableCellRightBorder]}>
+            <Ionicons name="people-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
+            <Text style={styles.tableValue}>{stats.totalStudents}</Text>
+            <Text style={styles.tableLabel}>Active Students</Text>
+          </View>
+          <View style={styles.tableCell}>
+            <Ionicons name="person-add-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
+            <Text style={styles.tableValue}>{stats.newJoins}</Text>
+            <Text style={styles.tableLabel}>New Joins</Text>
+          </View>
         </View>
-        <View style={styles.card}>
-          <Ionicons name="wallet-outline" size={24} color="#FF4C4C" />
-          <Text style={styles.cardValue}>₹{stats.pendingFees}</Text>
-          <Text style={styles.cardTitle}>Pending Fees</Text>
-          <Text style={styles.cardTrend}>{stats.duesToday} overdue</Text>
+        <View style={styles.dashboardTableRow}>
+          {selectedHostelId === 'all' ? (
+            <View style={[styles.tableCell, styles.tableCellRightBorder]}>
+              <Ionicons name="business-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
+              <Text style={styles.tableValue}>{stats.totalHostels}</Text>
+              <Text style={styles.tableLabel}>Total Hostels</Text>
+            </View>
+          ) : (
+            <View style={[styles.tableCell, styles.tableCellRightBorder, { backgroundColor: 'transparent', borderRightWidth: 0 }]} />
+          )}
+          <View style={styles.tableCell}>
+            <Ionicons name="bed-outline" size={22} color="#4B9EFF" style={styles.tableIcon} />
+            <Text style={styles.tableValue}>{stats.vacantRooms}</Text>
+            <Text style={styles.tableLabel}>Vacant Rooms</Text>
+          </View>
         </View>
-        <View style={styles.card}>
-          <Ionicons name="person-add-outline" size={24} color="#4B9EFF" />
-          <Text style={styles.cardValue}>{stats.newJoins}</Text>
-          <Text style={styles.cardTitle}>New Joins</Text>
-          <Text style={styles.cardTrend}>This week</Text>
-        </View>
-        <View style={styles.card}>
-          <Ionicons name="business-outline" size={24} color="#4B9EFF" />
-          <Text style={styles.cardValue}>{stats.totalHostels}</Text>
-          <Text style={styles.cardTitle}>Total Hostels</Text>
-        </View>
-        <View style={styles.card}>
-          <Ionicons name="bed-outline" size={24} color="#4B9EFF" />
-          <Text style={styles.cardValue}>{stats.vacantRooms}</Text>
-          <Text style={styles.cardTitle}>Vacant Rooms</Text>
-          <Text style={styles.cardTrend}>Tap to assign</Text>
-        </View>
-        <View style={styles.card}>
-          <Ionicons name="alert-circle-outline" size={24} color="#FF4C4C" />
-          <Text style={styles.cardValue}>{stats.overduePayments}</Text>
-          <Text style={styles.cardTitle}>Overdue Payments</Text>
-        </View>
+      </View>
+
+      {/* Due Payments */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Due Payments ({dueStudents.length})</Text>
+        {dueStudents.length === 0 ? (
+          <Text style={styles.emptyText}>No pending payments! 🎉</Text>
+        ) : (
+          dueStudents.map((student, idx) => (
+            <View key={idx} style={styles.dueStudentRow}>
+              <Ionicons name="alert-circle-outline" size={18} color="#FF4C4C" style={{ marginRight: 8 }} />
+              <Text style={styles.dueStudentName}>{student.name}</Text>
+              <Text style={styles.dueStudentRoom}>Room {student.room}</Text>
+              <Text style={styles.dueStudentAmount}>₹{student.feeAmount}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       {/* Recent Activity Feed */}
@@ -338,39 +539,50 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginHorizontal: 6,
   },
-  dashboardGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 20,
-    gap: 12,
-  },
-  card: {
-    width: '47%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
+  dashboardTableContainer: {
+    backgroundColor: '#F6FAFF',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginTop: 18,
+    marginBottom: 8,
+    paddingVertical: 8,
+    shadowColor: '#4B9EFF',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
-  cardValue: {
-    fontSize: 24,
+  dashboardTableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E3EFFF',
+  },
+  tableCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+  },
+  tableCellRightBorder: {
+    borderRightWidth: 1,
+    borderRightColor: '#E3EFFF',
+  },
+  tableCellFullWidth: {
+    flex: 1,
+    borderBottomWidth: 0,
+  },
+  tableIcon: {
+    marginBottom: 2,
+  },
+  tableValue: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 8,
+    marginBottom: 2,
   },
-  cardTitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  cardTrend: {
+  tableLabel: {
     fontSize: 12,
-    color: '#4B9EFF',
-    marginTop: 4,
+    color: '#6B7280',
   },
   section: {
     padding: 20,
@@ -484,5 +696,77 @@ const styles = StyleSheet.create({
   dropdownItemTextSelected: {
     color: '#4B9EFF',
     fontWeight: '500',
+  },
+  amountContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  amountCard: {
+    flex: 1,
+    backgroundColor: '#E8F2FF',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    marginHorizontal: 2,
+  },
+  amountTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B9EFF',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  amountValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  dueStudentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F5',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  dueStudentName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+    flex: 1,
+  },
+  dueStudentRoom: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  dueStudentAmount: {
+    fontSize: 14,
+    color: '#FF4C4C',
+    fontWeight: 'bold',
+    marginLeft: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 16,
   },
 }); 

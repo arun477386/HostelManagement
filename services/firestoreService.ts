@@ -2,7 +2,7 @@ import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from 'fireba
 import { app } from './firebase';
 import { Owner, Hostel, Student } from '../types/hostelSchema';
 
-const db = getFirestore(app);
+export const db = getFirestore(app);
 
 export const createOwnerDocument = async (uid: string, ownerData: Omit<Owner, 'hostels'>, initialHostel?: Hostel) => {
   try {
