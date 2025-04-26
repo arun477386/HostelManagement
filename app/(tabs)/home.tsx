@@ -103,27 +103,19 @@ export default function Home() {
       {/* Header: Owner Summary */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>Good Morning, {ownerName} 👋</Text>
-            {!loading && (
-              <TouchableOpacity 
-                style={styles.hostelSelector}
-                onPress={() => setIsDropdownOpen(!isDropdownOpen)}
-              >
-                <Ionicons name="business-outline" size={16} color="#4B9EFF" />
-                <Text style={styles.hostelText}>{selectedHostel?.name || 'All Hostels'}</Text>
-                <Ionicons 
-                  name={isDropdownOpen ? "chevron-up" : "chevron-down"} 
-                  size={16} 
-                  color="#4B9EFF" 
-                />
-              </TouchableOpacity>
-            )}
-          </View>
           {!loading && (
-            <Text style={styles.summary}>
-              You have {stats.totalHostels} hostels, {stats.totalStudents} students, {stats.duesToday} dues today
-            </Text>
+            <TouchableOpacity 
+              style={styles.hostelSelector}
+              onPress={() => setIsDropdownOpen(!isDropdownOpen)}
+            >
+              <Ionicons name="business-outline" size={16} color="#4B9EFF" />
+              <Text style={styles.hostelText}>{selectedHostel?.name || 'All Hostels'}</Text>
+              <Ionicons 
+                name={isDropdownOpen ? "chevron-up" : "chevron-down"} 
+                size={16} 
+                color="#4B9EFF" 
+              />
+            </TouchableOpacity>
           )}
         </View>
         <TouchableOpacity onPress={() => router.push('/profile')}>
@@ -131,6 +123,9 @@ export default function Home() {
             source={{ uri: 'https://via.placeholder.com/40' }}
             style={styles.profileImage}
           />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.notificationButton}>
+          <Ionicons name="notifications-outline" size={24} color="#4B9EFF" />
         </TouchableOpacity>
       </View>
 
@@ -310,32 +305,38 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 20,
+    alignItems: 'center',
+    padding: 16,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   headerContent: {
     flex: 1,
-    marginRight: 12,
   },
-  greetingContainer: {
-    marginBottom: 8,
-  },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  summary: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginTop: 4,
+  notificationButton: {
+    padding: 4,
+    marginLeft: 16,
   },
   profileImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
+  },
+  hostelSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  hostelText: {
+    fontSize: 14,
+    color: '#4B9EFF',
+    fontWeight: '500',
+    marginHorizontal: 6,
   },
   dashboardGrid: {
     flexDirection: 'row',
@@ -446,21 +447,6 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#6B7280',
-  },
-  hostelSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  hostelText: {
-    fontSize: 14,
-    color: '#4B9EFF',
-    fontWeight: '500',
-    marginHorizontal: 6,
   },
   modalOverlay: {
     flex: 1,

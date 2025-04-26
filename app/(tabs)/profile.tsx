@@ -80,7 +80,29 @@ export default function Profile() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#606770" />
         </TouchableOpacity>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingItemLeft}>
+            <Ionicons name="help-circle-outline" size={24} color="#4B9EFF" />
+            <Text style={styles.settingItemText}>Help & Support</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#606770" />
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingItemLeft}>
+            <Ionicons name="information-circle-outline" size={24} color="#4B9EFF" />
+            <Text style={styles.settingItemText}>About</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#606770" />
+        </View>
       </View>
+
+      {/* Sign Out Button */}
+      <TouchableOpacity style={styles.signOutButton}>
+        <Ionicons name="log-out-outline" size={24} color="#FF4C4C" />
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -166,5 +188,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1E1E1E',
     marginLeft: 12,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF5F5',
+    margin: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFE5E5',
+  },
+  signOutText: {
+    color: '#FF4C4C',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 
