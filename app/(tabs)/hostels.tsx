@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useHostelStore } from '../../services/hostelStore';
 import { useAuth } from '../../services/AuthContext';
 import { getStudentPaidStatus } from '../../utils/finance';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Hostel {
   id: string;
@@ -24,13 +25,19 @@ export default function HostelsScreen() {
   const setSelectedHostelId = useHostelStore(state => state.setSelectedHostelId);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const load = async () => {
       if (user) {
         setLoading(true);
-        await fetchHostels(user.uid);
-        setLoading(false);
+        try {
+          await fetchHostels(user.uid);
+        } catch (error) {
+          showToast('Failed to load hostels. Please try again.', 'error');
+        } finally {
+          setLoading(false);
+        }
       }
     };
     load();

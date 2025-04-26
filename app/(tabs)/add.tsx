@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import React from 'react';
 import { useActivityContext } from '../../services/ActivityContext';
 import HostelSelectorModal from '../../components/HostelSelectorModal';
+import { useToast } from '../../contexts/ToastContext';
 
 type SharingType = '1' | '2' | '3' | '4' | '5' | 'other';
 
@@ -35,7 +36,7 @@ interface FormData {
   sharingType: SharingType;
   joinDate: Date;
   feeAmount: string;
-  customCharges: CustomCharge[];
+  joiningAdvance: string;
 }
 
 interface FormErrors {
@@ -45,6 +46,7 @@ interface FormErrors {
   roomId?: string;
   sharingType?: string;
   feeAmount?: string;
+  joiningAdvance?: string;
 }
 
 export default function Add() {
@@ -66,7 +68,7 @@ export default function Add() {
     sharingType: '2',
     joinDate: new Date(),
     feeAmount: '',
-    customCharges: [{ label: '', amount: '' }],
+    joiningAdvance: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -76,6 +78,7 @@ export default function Add() {
   const [refreshing, setRefreshing] = useState(false);
   const filterIconRef = useRef<View>(null);
   const [filterDropdownPosition, setFilterDropdownPosition] = useState<{ left: number; top: number } | null>(null);
+  const { showToast } = useToast();
 
   const fetchHostels = async () => {
     try {
@@ -157,6 +160,26 @@ export default function Add() {
     }));
   };
 
+  const resetForm = () => {
+    setFormData({
+      fullName: '',
+      phone: '',
+      hostelId: selectedHostelId !== 'all' ? selectedHostelId : '',
+      roomId: '',
+      sharingType: '2',
+      joinDate: new Date(),
+      feeAmount: '',
+      joiningAdvance: '',
+    });
+    setErrors({});
+  };
+
+  useEffect(() => {
+    return () => {
+      resetForm();
+    };
+  }, []);
+
   const handleSubmit = async () => {
     // Validate form
     const newErrors: FormErrors = {};
@@ -166,6 +189,7 @@ export default function Add() {
     if (!formData.roomId) newErrors.roomId = 'Room number is required';
     if (!formData.sharingType) newErrors.sharingType = 'Sharing type is required';
     if (!formData.feeAmount) newErrors.feeAmount = 'Monthly fee is required';
+    if (!formData.joiningAdvance) newErrors.joiningAdvance = 'Joining advance is required';
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
@@ -208,10 +232,9 @@ export default function Add() {
         joinDate: formData.joinDate.toISOString(),
         leaveDate: null,
         feeAmount: parseFloat(formData.feeAmount),
-        customCharges: formData.customCharges.map(charge => ({
-          label: charge.label,
-          amount: parseFloat(charge.amount) || 0,
-        })),
+        joiningAdvance: {
+          amount: parseFloat(formData.joiningAdvance) || 0,
+        },
         isActive: true,
         documents: [],
         notes: '',
@@ -220,26 +243,16 @@ export default function Add() {
       // Create student in Firestore
       const studentId = await createStudent(user.uid, formData.hostelId, formData.roomId, studentData);
 
-      // Reset form fields
-      setFormData({
-        fullName: '',
-        phone: '',
-        hostelId: '',
-        roomId: '',
-        sharingType: '2',
-        joinDate: new Date(),
-        feeAmount: '',
-        customCharges: [{ label: '', amount: '' }],
-      });
+      // Show success toast
+      showToast('Student added successfully', 'success');
 
-      // Close the modal
+      // Reset form and close modal
+      resetForm();
       setIsAddModalVisible(false);
 
-      // Refresh the students list
+      // Refresh data
       await fetchStudents();
-
-      // Show success message
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      triggerRefresh();
 
       // Add activity with proper data structure
       const hostelName = hostels.find(h => h.id === formData.hostelId)?.name || '';
@@ -266,6 +279,7 @@ export default function Add() {
       triggerRefresh();
     } catch (err: any) {
       setError(err.message || 'An error occurred while adding the student');
+      showToast(err.message || 'Failed to add student', 'error');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
@@ -356,70 +370,44 @@ export default function Add() {
               style={styles.hostelSelector}
               onPress={() => setIsHostelDropdownOpen(!isHostelDropdownOpen)}
             >
-              <Ionicons name="business-outline" size={16} color="#4B9EFF" />
+              <Ionicons name="business-outline" size={16} color="#4B9EFF" style={{ marginRight: 3 }} />
               <Text
                 style={styles.hostelText}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
-                {hostels.find(h => h.id === selectedHostelId)?.name}
+                {(hostels.find(h => h.id === selectedHostelId)?.name || '') + ' '}
               </Text>
               <Ionicons 
                 name={isHostelDropdownOpen ? "chevron-up" : "chevron-down"} 
                 size={16} 
                 color="#4B9EFF" 
+                style={{ marginLeft: 6 }}
               />
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity
-          style={styles.addStudentButton}
-          onPress={() => setIsAddModalVisible(true)}
-        >
-          <Text style={styles.addStudentButtonText}>Add</Text>
-          <Ionicons name="person-add-outline" size={24} color="#4B9EFF" style={styles.addStudentButtonIcon} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          ref={filterIconRef}
-          style={styles.floatingFilterButton}
-          onPress={event => {
-            filterIconRef.current?.measureInWindow((x, y, width, height) => {
-              setFilterDropdownPosition({ left: x + width / 2, top: y + height });
-            });
-            setFilterDropdownVisible((v) => !v);
-          }}
-        >
-          <Ionicons name="filter-outline" size={22} color="#4B9EFF" />
-        </TouchableOpacity>
-        {filterDropdownVisible && filterDropdownPosition && (
-          <View style={[styles.filterDropdownBare, {
-            position: 'absolute',
-            right: 8,
-            top: filterDropdownPosition.top + 6,
-          }]}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={styles.addStudentButton}
+            onPress={() => setIsAddModalVisible(true)}
           >
-            <View style={styles.filterDropdownTightContainer}>
-              {[{ key: 'all', label: 'All' }, { key: 'paid', label: 'Paid' }, { key: 'unpaid', label: 'Unpaid' }].map(option => (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.filterDropdownBareItem,
-                    studentFilter === option.key && styles.filterDropdownBareItemSelected,
-                  ]}
-                  onPress={() => {
-                    setStudentFilter(option.key as any);
-                    setFilterDropdownVisible(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.filterDropdownBareText,
-                    studentFilter === option.key && styles.filterDropdownBareTextSelected,
-                  ]}>{option.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+            <Text style={styles.addStudentButtonText}>Add</Text>
+            <Ionicons name="person-add-outline" size={20} color="#4B9EFF" style={styles.addStudentButtonIcon} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            ref={filterIconRef}
+            style={styles.floatingFilterButton}
+            onPress={event => {
+              filterIconRef.current?.measureInWindow((x, y, width, height) => {
+                setFilterDropdownPosition({ left: x + width / 2, top: y + height });
+              });
+              setFilterDropdownVisible((v) => !v);
+            }}
+          >
+            <Ionicons name="filter-outline" size={20} color="#4B9EFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Student List */}
@@ -459,7 +447,6 @@ export default function Add() {
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {/* Existing form content */}
             <View style={styles.form}>
               {/* Full Name */}
               <View style={styles.inputGroup}>
@@ -615,47 +602,17 @@ export default function Add() {
                 {errors.feeAmount && <Text style={styles.error}>{errors.feeAmount}</Text>}
               </View>
 
-              {/* Custom Charges */}
+              {/* Joining Advance */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Custom Charges</Text>
-                {formData.customCharges.map((charge, index) => (
-                  <View key={index} style={styles.chargeRow}>
-                    <TextInput
-                      style={[styles.input, styles.chargeInput]}
-                      placeholder="Charge label"
-                      value={charge.label}
-                      onChangeText={(text) => {
-                        const newCharges = [...formData.customCharges];
-                        newCharges[index].label = text;
-                        setFormData({ ...formData, customCharges: newCharges });
-                      }}
-                    />
-                    <TextInput
-                      style={[styles.input, styles.chargeInput]}
-                      placeholder="Amount"
-                      value={charge.amount}
-                      onChangeText={(text) => {
-                        const newCharges = [...formData.customCharges];
-                        newCharges[index].amount = text;
-                        setFormData({ ...formData, customCharges: newCharges });
-                      }}
-                      keyboardType="numeric"
-                    />
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => handleRemoveCharge(index)}
-                    >
-                      <Ionicons name="close-circle" size={24} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={handleAddCharge}
-                >
-                  <Ionicons name="add-circle" size={24} color="#4B9EFF" />
-                  <Text style={styles.addButtonText}>Add Custom Charge</Text>
-                </TouchableOpacity>
+                <Text style={styles.label}>Joining Advance</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter joining advance amount"
+                  keyboardType="numeric"
+                  value={formData.joiningAdvance}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, joiningAdvance: text }))}
+                />
+                {errors.joiningAdvance && <Text style={styles.error}>{errors.joiningAdvance}</Text>}
               </View>
 
               {/* Upload ID Proof */}
@@ -733,6 +690,37 @@ export default function Add() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Filter Dropdown */}
+      {filterDropdownVisible && filterDropdownPosition && (
+        <View style={[styles.filterDropdownBare, {
+          position: 'absolute',
+          right: 8,
+          top: filterDropdownPosition.top + 6,
+        }]}
+        >
+          <View style={styles.filterDropdownTightContainer}>
+            {[{ key: 'all', label: 'All' }, { key: 'paid', label: 'Paid' }, { key: 'unpaid', label: 'Unpaid' }].map(option => (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.filterDropdownBareItem,
+                  studentFilter === option.key && styles.filterDropdownBareItemSelected,
+                ]}
+                onPress={() => {
+                  setStudentFilter(option.key as any);
+                  setFilterDropdownVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.filterDropdownBareText,
+                  studentFilter === option.key && styles.filterDropdownBareTextSelected,
+                ]}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -753,6 +741,10 @@ const styles = StyleSheet.create({
   },
   topBarContent: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    maxWidth: '45%',
   },
   hostelSelector: {
     flexDirection: 'row',
@@ -761,34 +753,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    alignSelf: 'flex-start',
+    flex: 1,
+    minWidth: 0,
   },
   hostelText: {
     fontSize: 14,
     color: '#4B9EFF',
     fontWeight: '500',
     marginHorizontal: 6,
-    maxWidth: 120,
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   addStudentButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F2FF',
     borderRadius: 20,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 6,
     marginLeft: 8,
-    marginRight: 8,
-    height: 40,
   },
   addStudentButtonText: {
     color: '#4B9EFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     marginLeft: 4,
   },
   addStudentButtonIcon: {
-    marginLeft: 6,
+    marginLeft: 4,
   },
   listContainer: {
     padding: 16,
@@ -1119,15 +1112,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#E8F2FF',
     borderRadius: 20,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    height: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 100,
+    marginLeft: 8,
   },
   filterDropdownBare: {
     zIndex: 1000,

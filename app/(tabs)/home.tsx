@@ -350,7 +350,7 @@ export default function Home() {
           )}
         </View>
         <View style={styles.headerRightRowSmall}>
-          <Text style={styles.dateText}>{todayStr}</Text>
+          <Text style={styles.dateText} numberOfLines={1} ellipsizeMode="clip">{todayStr}</Text>
           <TouchableOpacity style={styles.notificationButton}>
             <Ionicons name="notifications-outline" size={24} color="#4B9EFF" />
           </TouchableOpacity>
@@ -552,6 +552,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 0,
+    maxWidth: '45%',
   },
   notificationButton: {
     padding: 4,
@@ -569,22 +570,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    alignSelf: 'flex-start',
+    flex: 1,
+    minWidth: 0,
   },
   hostelText: {
     fontSize: 14,
     color: '#4B9EFF',
     fontWeight: '500',
     marginHorizontal: 6,
-    maxWidth: 180,
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   headerRightRowSmall: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 0,
-    maxWidth: 120,
+    maxWidth: 180,
   },
   dateText: {
     fontSize: 11,

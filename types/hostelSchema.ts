@@ -18,8 +18,7 @@ export interface Room {
   isFull: boolean;
 }
 
-export interface CustomCharge {
-  label: string;
+export interface JoiningAdvance {
   amount: number;
 }
 
@@ -38,7 +37,7 @@ export interface Student {
   joinDate: string;
   leaveDate: string | null;
   feeAmount: number;
-  customCharges: CustomCharge[];
+  joiningAdvance: JoiningAdvance;
   isActive: boolean;
   documents: string[];
   notes: string;
