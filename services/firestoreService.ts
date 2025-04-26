@@ -1,0 +1,113 @@
+import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { app } from './firebase';
+import { Owner, Hostel, Student } from '../types/hostelSchema';
+
+const db = getFirestore(app);
+
+export const createOwnerDocument = async (uid: string, ownerData: Omit<Owner, 'hostels'>, initialHostel?: Hostel) => {
+  try {
+    const ownerRef = doc(db, 'owners', uid);
+    await setDoc(ownerRef, {
+      ...ownerData,
+      hostels: initialHostel ? { [uid]: initialHostel } : {},
+      createdAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error creating owner document:', error);
+    throw error;
+  }
+};
+
+export const getOwnerDocument = async (uid: string) => {
+  try {
+    const ownerRef = doc(db, 'owners', uid);
+    const ownerSnap = await getDoc(ownerRef);
+    return ownerSnap.exists() ? ownerSnap.data() as Owner : null;
+  } catch (error) {
+    console.error('Error getting owner document:', error);
+    throw error;
+  }
+};
+
+export const createStudent = async (
+  ownerId: string,
+  hostelId: string,
+  roomId: string,
+  studentData: Omit<Student, 'payments'>
+) => {
+  try {
+    const ownerRef = doc(db, 'owners', ownerId);
+    const ownerDoc = await getDoc(ownerRef);
+    
+    if (!ownerDoc.exists()) {
+      throw new Error('Owner not found');
+    }
+
+    const ownerData = ownerDoc.data() as Owner;
+    const hostel = ownerData.hostels[hostelId];
+
+    if (!hostel) {
+      throw new Error('Hostel not found');
+    }
+
+    if (!hostel.rooms[roomId]) {
+      throw new Error('Room not found');
+    }
+
+    // Create student ID
+    const studentId = `student_${Date.now()}`;
+
+    // Create student object
+    const student: Student = {
+      ...studentData,
+      payments: {},
+    };
+
+    // Update hostel document
+    await updateDoc(ownerRef, {
+      [`hostels.${hostelId}.students.${studentId}`]: student,
+      [`hostels.${hostelId}.rooms.${roomId}.students`]: arrayUnion(studentId),
+      [`hostels.${hostelId}.rooms.${roomId}.isFull`]: hostel.rooms[roomId].students.length + 1 >= hostel.rooms[roomId].capacity,
+    });
+
+    return studentId;
+  } catch (error) {
+    console.error('Error creating student:', error);
+    throw error;
+  }
+};
+
+export const createHostel = async (ownerId: string, hostelData: Omit<Hostel, 'rooms' | 'students' | 'notifications'>) => {
+  try {
+    const ownerRef = doc(db, 'owners', ownerId);
+    const ownerDoc = await getDoc(ownerRef);
+    
+    if (!ownerDoc.exists()) {
+      throw new Error('Owner not found');
+    }
+
+    // Create hostel ID
+    const hostelId = `hostel_${Date.now()}`;
+
+    // Create hostel object
+    const hostel: Hostel = {
+      ...hostelData,
+      rooms: {},
+      students: {},
+      notifications: {},
+      createdAt: new Date().toISOString(),
+      isActive: true,
+    };
+
+    // Update owner document with new hostel
+    await updateDoc(ownerRef, {
+      [`hostels.${hostelId}`]: hostel,
+    });
+
+    return hostelId;
+  } catch (error) {
+    console.error('Error creating hostel:', error);
+    throw error;
+  }
+}; 
