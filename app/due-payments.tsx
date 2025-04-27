@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../services/AuthContext';
-import { useHostelStore } from '../../services/hostelStore';
-import { format, addMonths, startOfMonth, endOfMonth } from 'date-fns';
-import HostelSelectorModal from '../../components/HostelSelectorModal';
-import { useToast } from '../../contexts/ToastContext';
-import { getOwnerDocument } from '../../services/firestoreService';
-import { getStudentPaidStatus } from '../../utils/finance';
+import { useAuth } from '../services/AuthContext';
+import { useHostelStore } from '../services/hostelStore';
+import { format } from 'date-fns';
+import HostelSelectorModal from '../components/HostelSelectorModal';
+import { useToast } from '../contexts/ToastContext';
+import { getOwnerDocument } from '../services/firestoreService';
+import { getStudentPaidStatus } from '../utils/finance';
 import { useRouter } from 'expo-router';
-import { useAppData } from '../../contexts/AppDataContext';
+import { useAppData } from '../contexts/AppDataContext';
 
 interface Student {
   id: string;
@@ -18,6 +18,7 @@ interface Student {
   joinDate: string;
   hostelId: string;
   roomId: string;
+  feeAmount: number;
 }
 
 interface HostelOption {
@@ -25,25 +26,12 @@ interface HostelOption {
   name: string;
 }
 
-// Helper function to calculate due date
-const calculateDueDate = (joinDate: string) => {
-  const joinDateObj = new Date(joinDate);
-  // Get the day of the month
-  const day = joinDateObj.getDate();
-  // Create a new date for the next month
-  const dueDate = new Date(joinDateObj);
-  dueDate.setMonth(dueDate.getMonth() + 1);
-  // Set the same day of the month
-  dueDate.setDate(day);
-  return dueDate;
-};
-
-export default function SearchScreen() {
+export default function DuePaymentsScreen() {
   const { user } = useAuth();
   const { selectedHostelId, setSelectedHostelId } = useHostelStore();
   const { students, hostels: rawHostels, loading } = useAppData();
-  const [searchQuery, setSearchQuery] = useState('');
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { showToast } = useToast();
   const router = useRouter();
 
@@ -51,34 +39,25 @@ export default function SearchScreen() {
   const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
 
   const filteredStudents = students.filter(student => {
+    const paidStatus = getStudentPaidStatus(student);
     const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = student.fullName.toLowerCase().includes(searchLower) ||
-      student.phone.includes(searchQuery);
-    const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
-    return matchesSearch && matchesHostel;
+    return paidStatus === 'Unpaid' && (
+      student.fullName.toLowerCase().includes(searchLower) ||
+      student.phone.includes(searchQuery)
+    );
   });
 
   const renderStudentItem = ({ item }: { item: Student }) => {
     const hostelObj = hostels.find(h => h.id === item.hostelId);
     const hostelName = hostelObj ? hostelObj.name : '';
     const paidStatus = getStudentPaidStatus(item);
-    const dueDate = calculateDueDate(item.joinDate);
-    
     return (
       <TouchableOpacity 
         style={styles.studentRow}
         onPress={() => router.push({ pathname: `/student-profile/${item.id}`, params: { hostelId: item.hostelId } })}
       >
         <View style={styles.studentInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.studentName} numberOfLines={1} ellipsizeMode="tail">{item.fullName}</Text>
-            <View style={styles.paymentStatus}>
-              <Ionicons name={paidStatus === 'Paid' ? "checkmark-circle" : "alert-circle"} size={16} color={paidStatus === 'Paid' ? "#10B981" : "#EF4444"} />
-              <Text style={[styles.paymentStatusText, paidStatus === 'Paid' ? styles.paid : styles.unpaid]}>
-                {paidStatus === 'Paid' ? 'Paid' : 'Unpaid'}
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.studentName}>{item.fullName}</Text>
           <Text style={styles.studentDetails}>
             {hostelName} • Room {item.roomId}
           </Text>
@@ -93,12 +72,12 @@ export default function SearchScreen() {
                 Joined {format(new Date(item.joinDate), 'MMM d, yyyy')}
               </Text>
             </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={16} color="#F87171" />
-              <Text style={[styles.metaText, styles.dueDateText]}>
-                Due {format(dueDate, 'MMM d, yyyy')}
-              </Text>
-            </View>
+          </View>
+          <View style={styles.paymentStatus}>
+            <Ionicons name="alert-circle" size={16} color="#EF4444" />
+            <Text style={styles.paymentStatusText}>
+              Due: ₹{item.feeAmount}
+            </Text>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#6B7280" />
@@ -110,7 +89,13 @@ export default function SearchScreen() {
     <View style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <Text style={styles.screenTitle}>Search Students</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#4B9EFF" />
+        </TouchableOpacity>
+        <Text style={styles.screenTitle}>Due Payments</Text>
         <TouchableOpacity 
           style={styles.filterButton} 
           onPress={() => setIsFilterModalVisible(true)}
@@ -148,8 +133,8 @@ export default function SearchScreen() {
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color="#E5E7EB" />
-              <Text style={styles.emptyText}>No students found</Text>
+              <Ionicons name="checkmark-circle-outline" size={48} color="#E5E7EB" />
+              <Text style={styles.emptyText}>No due payments</Text>
             </View>
           }
         />
@@ -180,6 +165,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  backButton: {
+    padding: 4,
+  },
   screenTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -187,24 +175,6 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     padding: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 14,
   },
   listContainer: {
     padding: 16,
@@ -223,19 +193,11 @@ const styles = StyleSheet.create({
   studentInfo: {
     flex: 1,
   },
-  nameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-    width: '100%',
-  },
   studentName: {
     fontSize: 16,
     fontWeight: '500',
     color: '#1F2937',
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 4,
   },
   studentDetails: {
     fontSize: 14,
@@ -256,30 +218,16 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 4,
   },
-  rightSection: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginLeft: 12,
-  },
   paymentStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 'auto',
+    marginTop: 8,
   },
   paymentStatusText: {
-    fontSize: 13,
+    fontSize: 14,
+    color: '#EF4444',
     marginLeft: 4,
     fontWeight: '500',
-  },
-  paid: {
-    color: '#10B981',
-  },
-  unpaid: {
-    color: '#EF4444',
   },
   loadingContainer: {
     flex: 1,
@@ -296,7 +244,22 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 16,
   },
-  dueDateText: {
-    color: '#F87171', // Light red color
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    margin: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    fontSize: 14,
   },
 }); 

@@ -22,6 +22,7 @@ type SharingType = '1' | '2' | '3' | '4' | '5' | 'other';
 
 interface Student extends SchemaStudent {
   id: string;
+  hostelId: string;
 }
 
 interface FormData {
@@ -53,14 +54,14 @@ export default function Add() {
   const [isHostelDropdownOpen, setIsHostelDropdownOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSharingDropdownOpen, setIsSharingDropdownOpen] = useState(false);
-  const { hostels: rawHostels, students } = useAppData();
+  const { hostels: rawHostels, students, refresh } = useAppData();
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
     phone: '',
     hostelId: selectedHostelId !== 'all' ? selectedHostelId : '',
     roomId: '',
-    sharingType: '2',
+    sharingType: '4',
     joinDate: new Date(),
     feeAmount: '',
     joiningAdvance: '',
@@ -84,7 +85,7 @@ export default function Add() {
       phone: '',
       hostelId: selectedHostelId !== 'all' ? selectedHostelId : '',
       roomId: '',
-      sharingType: '2',
+      sharingType: '4',
       joinDate: new Date(),
       feeAmount: '',
       joiningAdvance: '',
@@ -162,10 +163,7 @@ export default function Add() {
       resetForm();
       setIsAddModalVisible(false);
 
-      // Refresh data
-      triggerRefresh();
-
-      // Add activity with proper data structure
+      // Add activity
       const hostelName = hostels.find(h => h.id === formData.hostelId)?.name || '';
       await addRecentActivity(user.uid, {
         type: 'student_added',
@@ -174,20 +172,15 @@ export default function Add() {
         studentId: studentId,
         createdAt: new Date().toISOString(),
       });
-      // Fetch recent activities immediately so UI updates without reload
-      if (typeof getRecentActivities === 'function') {
-        try {
-          const recentActivities = await getRecentActivities(user.uid);
-          if (recentActivities && typeof window !== 'undefined') {
-            // If you have a context or state for activities, update it here
-            // For example, if using useActivityContext or similar:
-            if (typeof triggerRefresh === 'function') triggerRefresh();
-          }
-        } catch (e) {
-          // Ignore errors
-        }
+
+      // Refresh all data
+      if (typeof window !== 'undefined') {
+        // Refresh AppDataContext
+        await refresh();
+        
+        // Trigger activity refresh
+        triggerRefresh();
       }
-      triggerRefresh();
     } catch (err: any) {
       setError(err.message || 'An error occurred while adding the student');
       showToast(err.message || 'Failed to add student', 'error');
@@ -222,15 +215,27 @@ export default function Add() {
   };
 
   const filteredStudents = students.filter(student => {
-    if (studentFilter === 'all') return true;
+    // Filter by hostel
+    const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
+    
+    // Filter by payment status
     const status = getStudentPaidStatus(student);
-    return studentFilter === 'paid' ? status === 'Paid' : status === 'Unpaid';
+    const matchesPaymentStatus = studentFilter === 'all' || 
+      (studentFilter === 'paid' && status === 'Paid') || 
+      (studentFilter === 'unpaid' && status === 'Unpaid');
+
+    return matchesHostel && matchesPaymentStatus;
   });
 
   const renderStudentCard = ({ item }: { item: Student }) => {
-    const paidStatus = checkPaidStatus(item);
+    const hostelObj = hostels.find(h => h.id === item.hostelId);
+    const hostelName = hostelObj ? hostelObj.name : '';
+    
     return (
-      <View style={styles.studentCard}>
+      <TouchableOpacity 
+        style={styles.studentCard}
+        onPress={() => router.push({ pathname: `/student-profile/${item.id}`, params: { hostelId: item.hostelId } })}
+      >
         {/* Line 1: Name | Room No */}
         <View style={styles.studentCardRowJustify}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -244,18 +249,18 @@ export default function Add() {
           <Ionicons name="call-outline" size={16} color="#606770" style={{ marginRight: 4 }} />
           <Text style={styles.studentPhone}>{item.phone}</Text>
         </View>
-        {/* Line 3: Join Date + Paid/Unpaid Badge */}
+        {/* Line 3: Join Date + Hostel Name */}
         <View style={styles.studentCardRow}>
           <Ionicons name="calendar-outline" size={16} color="#606770" style={{ marginRight: 4 }} />
           <Text style={styles.studentJoinDate}>
             Joined: {new Date(item.joinDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </Text>
           <View style={styles.badgeSpacer} />
-          <Text style={[styles.paidBadge, paidStatus === 'Paid' ? styles.paid : styles.unpaid]}>
-            {paidStatus === 'Paid' ? '✅ Paid' : '❌ Unpaid'}
+          <Text style={styles.hostelName}>
+            {hostelName}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -498,7 +503,7 @@ export default function Add() {
                 <Text style={styles.label}>Monthly Fee</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter monthly fee"
+                  placeholder="₹ Enter monthly fee"
                   keyboardType="numeric"
                   value={formData.feeAmount}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, feeAmount: text }))}
@@ -511,7 +516,7 @@ export default function Add() {
                 <Text style={styles.label}>Joining Advance</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter joining advance amount"
+                  placeholder="₹ Enter joining advance amount"
                   keyboardType="numeric"
                   value={formData.joiningAdvance}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, joiningAdvance: text }))}
@@ -735,16 +740,10 @@ const styles = StyleSheet.create({
   badgeSpacer: {
     flex: 1,
   },
-  paidBadge: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  paid: {
-    color: '#10B981', // green
-  },
-  unpaid: {
-    color: '#FF4C4C', // red
+  hostelName: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
   emptyContainer: {
     flex: 1,

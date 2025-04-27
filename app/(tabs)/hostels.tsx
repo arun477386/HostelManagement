@@ -49,7 +49,7 @@ export default function HostelsScreen() {
         style={styles.hostelCard}
         onPress={() => {
           setSelectedHostelId(item.id);
-          router.push(`/hostel-details/${item.id}`);
+          router.push(`/hostel/${item.id}`);
         }}
       >
         {/* Hostel Name and Location */}

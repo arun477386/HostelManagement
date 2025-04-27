@@ -344,18 +344,33 @@ export default function Home() {
 
       {/* Due Payments */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Due Payments ({dueStudents.length})</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Due Payments</Text>
+          <TouchableOpacity onPress={() => router.push('/due-payments')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
         {dueStudents.length === 0 ? (
           <Text style={styles.emptyText}>No pending payments! 🎉</Text>
         ) : (
-          dueStudents.map((student, idx) => (
-            <View key={idx} style={styles.dueStudentRow}>
-              <Ionicons name="alert-circle-outline" size={18} color="#FF4C4C" style={{ marginRight: 8 }} />
-              <Text style={styles.dueStudentName}>{student.name}</Text>
-              <Text style={styles.dueStudentRoom}>Room {student.room}</Text>
-              <Text style={styles.dueStudentAmount}>₹{student.feeAmount}</Text>
-            </View>
-          ))
+          <>
+            {dueStudents.slice(0, 3).map((student, idx) => (
+              <View key={idx} style={styles.dueStudentRow}>
+                <Ionicons name="alert-circle-outline" size={18} color="#FF4C4C" style={{ marginRight: 8 }} />
+                <Text style={styles.dueStudentName}>{student.name}</Text>
+                <Text style={styles.dueStudentRoom}>Room {student.room}</Text>
+                <Text style={styles.dueStudentAmount}>₹{student.feeAmount}</Text>
+              </View>
+            ))}
+            {dueStudents.length > 3 && (
+              <TouchableOpacity 
+                style={styles.seeMoreButton}
+                onPress={() => router.push('/due-payments')}
+              >
+                <Text style={styles.seeMoreText}>+{dueStudents.length - 3} more</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
 
@@ -740,5 +755,18 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 16,
+  },
+  seeMoreButton: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  seeMoreText: {
+    color: '#4B9EFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 

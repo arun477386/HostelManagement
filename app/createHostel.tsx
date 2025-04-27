@@ -10,6 +10,7 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { layout } from '../theme/layout';
 import { HostelGender } from '../types/hostelSchema';
+import { useAppData } from '../contexts/AppDataContext';
 
 interface FormData {
   name: string;
@@ -40,6 +41,7 @@ export default function CreateHostelScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const { setSelectedHostelId, fetchHostels } = useHostelStore();
   const { triggerRefresh } = useActivityContext();
+  const { refresh } = useAppData();
 
   const handleSubmit = async () => {
     // Validate form
@@ -78,10 +80,18 @@ export default function CreateHostelScreen() {
         hostelId: hostelId,
         createdAt: new Date().toISOString(),
       });
-      triggerRefresh();
 
-      // Refetch hostels list so the new hostel appears immediately
-      await fetchHostels(user.uid);
+      // Refresh all data
+      if (typeof window !== 'undefined') {
+        // Refresh AppDataContext
+        refresh();
+        
+        // Trigger activity refresh
+        triggerRefresh();
+        
+        // Refetch hostels list
+        await fetchHostels(user.uid);
+      }
 
       // Set this hostel as the selected hostel
       setSelectedHostelId(hostelId);
