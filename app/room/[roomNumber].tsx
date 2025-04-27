@@ -70,7 +70,10 @@ export default function RoomViewScreen() {
     );
   }
 
-  const roomStudents = students.filter(student => student.roomId === roomNumber);
+  const roomStudents = students.filter(student => 
+    student.roomId === roomNumber && 
+    student.hostelId === hostelId
+  );
 
   return (
     <View style={styles.container}>

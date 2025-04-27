@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Modal, ActivityIndicator, BackHandler, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { auth } from '../../services/firebase';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,9 @@ import { getOwnerDocument, addRecentActivity, getRecentActivities } from '../../
 import { Owner } from '../../types/hostelSchema';
 import { useHostelFinanceData } from '../../hooks/useHostelFinanceData';
 import { getStudentPaidStatus } from '../../utils/finance';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import { useActivityContext } from '../../services/ActivityContext';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import HostelSelectorModal from '../../components/HostelSelectorModal';
 import { useAppData } from '../../contexts/AppDataContext';
 
@@ -145,7 +145,10 @@ export default function Home() {
   const { amountCollected, pendingFees, loading: financeLoading, error: financeError } = useHostelFinanceData(selectedHostelId);
   const { refreshKey } = useActivityContext();
   const router = useRouter();
+  const pathname = usePathname();
   const [refreshing, setRefreshing] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(format(new Date(), 'MMMM yyyy'));
+  const [previousMonthData, setPreviousMonthData] = useState<{amountCollected: number, pendingFees: number} | null>(null);
 
   const todayStr = format(new Date(), 'EEE, dd MMM yyyy');
 
@@ -245,6 +248,38 @@ export default function Home() {
     setRefreshing(false);
   };
 
+  // Handle back button based on current screen
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If we're on the home screen, close the app
+      if (pathname === '/(tabs)/home') {
+        BackHandler.exitApp();
+        return true;
+      }
+      // Otherwise, let the navigation handle going back
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [pathname]);
+
+  // Store previous month's data when month changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newMonth = format(new Date(), 'MMMM yyyy');
+      if (newMonth !== currentMonth) {
+        // Store current month's data before updating
+        setPreviousMonthData({
+          amountCollected,
+          pendingFees
+        });
+        setCurrentMonth(newMonth);
+      }
+    }, 3600000); // Check every hour
+
+    return () => clearInterval(interval);
+  }, [currentMonth, amountCollected, pendingFees]);
+
   return (
     <ScrollView 
       style={styles.container}
@@ -284,18 +319,33 @@ export default function Home() {
         </View>
       </View>
 
-      {/* Amount & Pending Fees Card */}
-      <View style={styles.amountContainer}>
+      {/* Combined Month and Amount Container */}
+      <View style={styles.combinedContainer}>
+        <View style={styles.monthDisplay}>
+          <Ionicons name="calendar-outline" size={18} color="#4B9EFF" style={styles.monthIcon} />
+          <Text style={styles.monthText}>{currentMonth} Financial Summary</Text>
+        </View>
+        
         <View style={styles.amountRow}>
           <View style={styles.amountCard}>
             <Ionicons name="cash-outline" size={24} color="#4B9EFF" style={{ marginBottom: 6 }} />
             <Text style={styles.amountTitle}>Amount Collected</Text>
             <Text style={styles.amountValue}>₹{amountCollected}</Text>
+            {previousMonthData && (
+              <Text style={styles.previousMonthText}>
+                Last Month: ₹{previousMonthData.amountCollected}
+              </Text>
+            )}
           </View>
           <View style={styles.amountCard}>
             <Ionicons name="wallet-outline" size={24} color="#FF4C4C" style={{ marginBottom: 6, marginRight: 4 }} />
             <Text style={styles.amountTitle}>Pending Fees</Text>
             <Text style={styles.amountValue}>₹{pendingFees}</Text>
+            {previousMonthData && (
+              <Text style={styles.previousMonthText}>
+                Last Month: ₹{previousMonthData.pendingFees}
+              </Text>
+            )}
           </View>
         </View>
         {financeError ? <Text style={{ color: 'red', textAlign: 'center', marginTop: 8 }}>{financeError}</Text> : null}
@@ -684,10 +734,10 @@ const styles = StyleSheet.create({
     color: '#4B9EFF',
     fontWeight: '500',
   },
-  amountContainer: {
+  combinedContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     marginHorizontal: 20,
     marginTop: 12,
     marginBottom: 0,
@@ -697,24 +747,45 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  monthDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F6FAFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8F2FF',
+  },
+  monthIcon: {
+    marginRight: 10,
+  },
+  monthText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    letterSpacing: 0.3,
+  },
   amountRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   amountCard: {
     flex: 1,
-    backgroundColor: '#E8F2FF',
+    backgroundColor: '#F6FAFF',
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
-    marginHorizontal: 2,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
   amountTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#4B9EFF',
-    marginBottom: 2,
+    marginBottom: 4,
     textAlign: 'center',
   },
   amountValue: {
@@ -722,7 +793,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
     textAlign: 'center',
-    marginTop: 2,
   },
   dueStudentRow: {
     flexDirection: 'row',
@@ -768,5 +838,11 @@ const styles = StyleSheet.create({
     color: '#4B9EFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  previousMonthText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
   },
 }); 
