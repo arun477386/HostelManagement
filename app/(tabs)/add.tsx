@@ -9,7 +9,7 @@ import { doc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firestoreService';
 import { useHostelStore } from '../../services/hostelStore';
 import { Student as SchemaStudent } from '../../types/hostelSchema';
-import { differenceInMonths, parseISO, format } from 'date-fns';
+import { differenceInMonths, parseISO, format, getDaysInMonth, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { getStudentPaidStatus } from '../../utils/finance';
 import { useFocusEffect } from '@react-navigation/native';
 import React from 'react';
@@ -527,51 +527,101 @@ export default function Add() {
                   <Modal
                     visible={showDatePicker}
                     transparent={true}
-                    animationType="slide"
+                    animationType="fade"
                     onRequestClose={() => setShowDatePicker(false)}
                   >
-                    <View style={styles.modalContainer}>
-                      <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Join Date</Text>
-                        <View style={styles.datePickerContainer}>
-                          <TextInput
-                            style={styles.dateInput}
-                            value={formData.joinDate.toLocaleDateString()}
-                            editable={false}
-                          />
+                    <View style={styles.datePickerModal}>
+                      <View style={styles.datePickerContainer}>
+                        <View style={styles.datePickerHeader}>
+                          <Text style={styles.datePickerTitle}>Select Join Date</Text>
                           <TouchableOpacity
-                            style={styles.datePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(formData.joinDate);
-                              newDate.setDate(newDate.getDate() + 1);
-                              setFormData({ ...formData, joinDate: newDate });
-                            }}
+                            style={styles.datePickerCloseButton}
+                            onPress={() => setShowDatePicker(false)}
                           >
-                            <Ionicons name="chevron-up" size={24} color="#4B9EFF" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.datePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(formData.joinDate);
-                              newDate.setDate(newDate.getDate() - 1);
-                              setFormData({ ...formData, joinDate: newDate });
-                            }}
-                          >
-                            <Ionicons name="chevron-down" size={24} color="#4B9EFF" />
+                            <Ionicons name="close" size={24} color="#6B7280" />
                           </TouchableOpacity>
                         </View>
-                        <View style={styles.modalButtons}>
+
+                        <View style={styles.datePickerMonthSelector}>
                           <TouchableOpacity
-                            style={[styles.modalButton, styles.cancelButton]}
+                            style={styles.datePickerMonthButton}
+                            onPress={() => {
+                              const newDate = new Date(formData.joinDate);
+                              newDate.setMonth(newDate.getMonth() - 1);
+                              setFormData({ ...formData, joinDate: newDate });
+                            }}
+                          >
+                            <Ionicons name="chevron-back" size={24} color="#4B9EFF" />
+                          </TouchableOpacity>
+                          <Text style={styles.datePickerMonthText}>
+                            {format(formData.joinDate, 'MMMM yyyy')}
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.datePickerMonthButton}
+                            onPress={() => {
+                              const newDate = new Date(formData.joinDate);
+                              newDate.setMonth(newDate.getMonth() + 1);
+                              setFormData({ ...formData, joinDate: newDate });
+                            }}
+                          >
+                            <Ionicons name="chevron-forward" size={24} color="#4B9EFF" />
+                          </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.datePickerWeekDays}>
+                          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+                            <Text key={day} style={styles.datePickerWeekDay}>{day}</Text>
+                          ))}
+                        </View>
+
+                        <View style={styles.datePickerDays}>
+                          {eachDayOfInterval({
+                            start: startOfMonth(formData.joinDate),
+                            end: endOfMonth(formData.joinDate)
+                          }).map((date) => {
+                            const isSelected = date.getDate() === formData.joinDate.getDate() &&
+                                             date.getMonth() === formData.joinDate.getMonth() &&
+                                             date.getFullYear() === formData.joinDate.getFullYear();
+                            const isDisabled = date > new Date();
+
+                            return (
+                              <TouchableOpacity
+                                key={date.toISOString()}
+                                style={[
+                                  styles.datePickerDay,
+                                  isSelected && styles.datePickerDaySelected,
+                                  isDisabled && styles.datePickerDayDisabled
+                                ]}
+                                onPress={() => {
+                                  if (!isDisabled) {
+                                    setFormData({ ...formData, joinDate: date });
+                                  }
+                                }}
+                                disabled={isDisabled}
+                              >
+                                <Text style={[
+                                  styles.datePickerDayText,
+                                  isSelected && styles.datePickerDayTextSelected
+                                ]}>
+                                  {date.getDate()}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        <View style={styles.datePickerActions}>
+                          <TouchableOpacity
+                            style={[styles.datePickerActionButton, styles.datePickerCancelButton]}
                             onPress={() => setShowDatePicker(false)}
                           >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                            <Text style={[styles.datePickerActionText, styles.datePickerCancelText]}>Cancel</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={[styles.modalButton, styles.confirmButton]}
+                            style={[styles.datePickerActionButton, styles.datePickerConfirmButton]}
                             onPress={() => setShowDatePicker(false)}
                           >
-                            <Text style={styles.confirmButtonText}>Confirm</Text>
+                            <Text style={[styles.datePickerActionText, styles.datePickerConfirmText]}>Confirm</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -989,69 +1039,131 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   dateButton: {
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
   },
   dateButtonText: {
     fontSize: 16,
     color: '#1F2937',
   },
-  datePickerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  dateInput: {
+  datePickerModal: {
     flex: 1,
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    color: '#1F2937',
-    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  datePickerButton: {
-    padding: 8,
-    marginLeft: 8,
+  datePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  modalButtons: {
+  datePickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  modalButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: 8,
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  datePickerCloseButton: {
+    padding: 8,
+  },
+  datePickerMonthSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  datePickerMonthText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  datePickerMonthButton: {
+    padding: 8,
+  },
+  datePickerWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  datePickerWeekDay: {
+    width: 40,
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  datePickerDays: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 0,
+  },
+  datePickerDay: {
+    width: '14.28%', // 100% / 7 days
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
+    padding: 0,
   },
-  cancelButton: {
+  datePickerDayText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  datePickerDaySelected: {
+    backgroundColor: '#4B9EFF',
+    borderRadius: 20,
+  },
+  datePickerDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  datePickerDayDisabled: {
+    opacity: 0.3,
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 20,
+  },
+  datePickerActionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  datePickerActionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  datePickerCancelButton: {
     backgroundColor: '#F3F4F6',
   },
-  confirmButton: {
+  datePickerCancelText: {
+    color: '#6B7280',
+  },
+  datePickerConfirmButton: {
     backgroundColor: '#4B9EFF',
   },
-  cancelButtonText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  confirmButtonText: {
+  datePickerConfirmText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
   },
   rowContainer: {
     flexDirection: 'row',
