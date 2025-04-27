@@ -75,6 +75,13 @@ export default function Add() {
   const filterIconRef = useRef<View>(null);
   const [filterDropdownPosition, setFilterDropdownPosition] = useState<{ left: number; top: number } | null>(null);
   const { showToast } = useToast();
+  const [roomRegistry, setRoomRegistry] = useState<{
+    [roomNumber: string]: {
+      sharingType: SharingType;
+      maxCapacity: number;
+      currentStudents: number;
+    };
+  }>({});
 
   // Map hostels to always include id and name for UI
   const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
@@ -93,6 +100,79 @@ export default function Add() {
     setErrors({});
   };
 
+  // Function to check and update room registry
+  const updateRoomRegistry = (roomNumber: string, sharingType?: SharingType) => {
+    if (!roomNumber) return;
+
+    const existingRoom = roomRegistry[roomNumber];
+    
+    if (existingRoom) {
+      // Room exists, update form data with stored sharing type
+      setFormData(prev => ({
+        ...prev,
+        sharingType: existingRoom.sharingType
+      }));
+      return existingRoom;
+    } else if (sharingType) {
+      // New room, add to registry
+      const newRoom = {
+        sharingType,
+        maxCapacity: parseInt(sharingType),
+        currentStudents: 0
+      };
+      setRoomRegistry(prev => ({
+        ...prev,
+        [roomNumber]: newRoom
+      }));
+      return newRoom;
+    }
+    return null;
+  };
+
+  // Handle room number change
+  const handleRoomNumberChange = (roomNumber: string) => {
+    setFormData(prev => ({ ...prev, roomId: roomNumber }));
+    const roomData = updateRoomRegistry(roomNumber);
+    
+    if (roomData) {
+      // Check if room is full
+      if (roomData.currentStudents >= roomData.maxCapacity) {
+        setErrors(prev => ({
+          ...prev,
+          roomId: `Room ${roomNumber} is full`
+        }));
+      } else {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.roomId;
+          return newErrors;
+        });
+      }
+    } else {
+      // New room, clear any room-related errors
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.roomId;
+        return newErrors;
+      });
+    }
+  };
+
+  // Handle sharing type change
+  const handleSharingTypeChange = (sharingType: SharingType) => {
+    if (!formData.roomId) {
+      setFormData(prev => ({ ...prev, sharingType }));
+      return;
+    }
+
+    const existingRoom = roomRegistry[formData.roomId];
+    if (!existingRoom) {
+      // Only allow sharing type change for new rooms
+      setFormData(prev => ({ ...prev, sharingType }));
+      updateRoomRegistry(formData.roomId, sharingType);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validate form
     const newErrors: FormErrors = {};
@@ -103,6 +183,12 @@ export default function Add() {
     if (!formData.sharingType) newErrors.sharingType = 'Sharing type is required';
     if (!formData.feeAmount) newErrors.feeAmount = 'Monthly fee is required';
     if (!formData.joiningAdvance) newErrors.joiningAdvance = 'Joining advance is required';
+
+    // Check room capacity
+    const roomData = roomRegistry[formData.roomId];
+    if (roomData && roomData.currentStudents >= roomData.maxCapacity) {
+      newErrors.roomId = `Room ${formData.roomId} is full`;
+    }
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
@@ -125,7 +211,7 @@ export default function Add() {
         const roomData = {
           roomNumber: formData.roomId,
           type: 'standard',
-          capacity: parseInt(formData.sharingType) || 2,
+          capacity: parseInt(formData.sharingType) || 4,
           sharingType: formData.sharingType,
           students: [],
           isFull: false,
@@ -155,6 +241,15 @@ export default function Add() {
 
       // Create student in Firestore
       const studentId = await createStudent(user.uid, formData.hostelId, formData.roomId, studentData);
+
+      // Update room registry
+      setRoomRegistry(prev => ({
+        ...prev,
+        [formData.roomId]: {
+          ...prev[formData.roomId],
+          currentStudents: (prev[formData.roomId]?.currentStudents || 0) + 1
+        }
+      }));
 
       // Show success toast
       showToast('Student added successfully', 'success');
@@ -349,7 +444,10 @@ export default function Add() {
             <Text style={styles.modalTitle}>Add New Student</Text>
             <TouchableOpacity 
               style={styles.closeButton}
-              onPress={() => setIsAddModalVisible(false)}
+              onPress={() => {
+                setIsAddModalVisible(false);
+                resetForm();
+              }}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>
@@ -406,7 +504,7 @@ export default function Add() {
                       style={styles.input}
                       placeholder="Room number"
                       value={formData.roomId}
-                      onChangeText={(text) => setFormData(prev => ({ ...prev, roomId: text }))}
+                      onChangeText={(text) => handleRoomNumberChange(text)}
                       keyboardType="numeric"
                     />
                     {errors.roomId && <Text style={styles.error}>{errors.roomId}</Text>}
@@ -584,7 +682,7 @@ export default function Add() {
                   formData.sharingType === type && styles.dropdownItemSelected
                 ]}
                 onPress={() => {
-                  setFormData(prev => ({ ...prev, sharingType: type }));
+                  handleSharingTypeChange(type as SharingType);
                   setIsSharingDropdownOpen(false);
                 }}
               >
