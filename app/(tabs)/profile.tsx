@@ -43,6 +43,14 @@ export default function Profile() {
     router.push('/change-password');
   };
 
+  const handleAbout = () => {
+    router.push('/about');
+  };
+
+  const handleHelpSupport = () => {
+    router.push('/help-support');
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -116,21 +124,21 @@ export default function Profile() {
           <Ionicons name="chevron-forward" size={20} color="#606770" />
         </TouchableOpacity>
 
-        <View style={styles.settingItem}>
+        <TouchableOpacity style={styles.settingItem} onPress={handleHelpSupport}>
           <View style={styles.settingItemLeft}>
             <Ionicons name="help-circle-outline" size={24} color="#4B9EFF" />
             <Text style={styles.settingItemText}>Help & Support</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#606770" />
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.settingItem}>
+        <TouchableOpacity style={styles.settingItem} onPress={handleAbout}>
           <View style={styles.settingItemLeft}>
             <Ionicons name="information-circle-outline" size={24} color="#4B9EFF" />
             <Text style={styles.settingItemText}>About</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#606770" />
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Sign Out Button */}
@@ -138,6 +146,8 @@ export default function Profile() {
         <Ionicons name="log-out-outline" size={24} color="#FF4C4C" />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+
+      <Text style={styles.copyrightText}>© 2025 HostelEase. All rights reserved.</Text>
     </ScrollView>
   );
 }
@@ -240,6 +250,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  copyrightText: {
+    textAlign: 'center',
+    color: '#606770',
+    fontSize: 12,
+    marginBottom: 20,
   },
   letterAvatar: {
     backgroundColor: '#4B9EFF',

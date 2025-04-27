@@ -312,14 +312,7 @@ export default function Add() {
   const filteredStudents = students.filter(student => {
     // Filter by hostel
     const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
-    
-    // Filter by payment status
-    const status = getStudentPaidStatus(student);
-    const matchesPaymentStatus = studentFilter === 'all' || 
-      (studentFilter === 'paid' && status === 'Paid') || 
-      (studentFilter === 'unpaid' && status === 'Unpaid');
-
-    return matchesHostel && matchesPaymentStatus;
+    return matchesHostel;
   });
 
   const renderStudentCard = ({ item }: { item: Student }) => {
@@ -398,18 +391,6 @@ export default function Add() {
           >
             <Text style={styles.addStudentButtonText}>Add</Text>
             <Ionicons name="person-add-outline" size={20} color="#4B9EFF" style={styles.addStudentButtonIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            ref={filterIconRef}
-            style={styles.floatingFilterButton}
-            onPress={event => {
-              filterIconRef.current?.measureInWindow((x, y, width, height) => {
-                setFilterDropdownPosition({ left: x + width / 2, top: y + height });
-              });
-              setFilterDropdownVisible((v) => !v);
-            }}
-          >
-            <Ionicons name="filter-outline" size={20} color="#4B9EFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -697,37 +678,6 @@ export default function Add() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      {/* Filter Dropdown */}
-      {filterDropdownVisible && filterDropdownPosition && (
-        <View style={[styles.filterDropdownBare, {
-          position: 'absolute',
-          right: 8,
-          top: filterDropdownPosition.top + 6,
-        }]}
-        >
-          <View style={styles.filterDropdownTightContainer}>
-            {[{ key: 'all', label: 'All' }, { key: 'paid', label: 'Paid' }, { key: 'unpaid', label: 'Unpaid' }].map(option => (
-              <TouchableOpacity
-                key={option.key}
-                style={[
-                  styles.filterDropdownBareItem,
-                  studentFilter === option.key && styles.filterDropdownBareItemSelected,
-                ]}
-                onPress={() => {
-                  setStudentFilter(option.key as any);
-                  setFilterDropdownVisible(false);
-                }}
-              >
-                <Text style={[
-                  styles.filterDropdownBareText,
-                  studentFilter === option.key && styles.filterDropdownBareTextSelected,
-                ]}>{option.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
     </View>
   );
 }

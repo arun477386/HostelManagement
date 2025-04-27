@@ -44,6 +44,8 @@ export default function SearchScreen() {
   const { students, hostels: rawHostels, loading } = useAppData();
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [isPaymentFilterVisible, setIsPaymentFilterVisible] = useState(false);
   const { showToast } = useToast();
   const router = useRouter();
 
@@ -55,7 +57,10 @@ export default function SearchScreen() {
     const matchesSearch = student.fullName.toLowerCase().includes(searchLower) ||
       student.phone.includes(searchQuery);
     const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
-    return matchesSearch && matchesHostel;
+    const matchesPayment = paymentFilter === 'all' || 
+      (paymentFilter === 'paid' && getStudentPaidStatus(student) === 'Paid') ||
+      (paymentFilter === 'unpaid' && getStudentPaidStatus(student) === 'Unpaid');
+    return matchesSearch && matchesHostel && matchesPayment;
   });
 
   const renderStudentItem = ({ item }: { item: Student }) => {
@@ -111,12 +116,66 @@ export default function SearchScreen() {
       {/* Top Bar */}
       <View style={styles.topBar}>
         <Text style={styles.screenTitle}>Search Students</Text>
-        <TouchableOpacity 
-          style={styles.filterButton} 
-          onPress={() => setIsFilterModalVisible(true)}
-        >
-          <Ionicons name="filter-outline" size={22} color="#4B9EFF" />
-        </TouchableOpacity>
+        <View style={styles.topBarButtons}>
+          <TouchableOpacity 
+            style={styles.filterButton} 
+            onPress={() => setIsFilterModalVisible(true)}
+          >
+            <Ionicons name="business-outline" size={22} color="#4B9EFF" />
+          </TouchableOpacity>
+          <View style={styles.paymentFilterContainer}>
+            <TouchableOpacity 
+              style={[styles.paymentFilterButton, isPaymentFilterVisible && styles.paymentFilterButtonActive]} 
+              onPress={() => setIsPaymentFilterVisible(!isPaymentFilterVisible)}
+            >
+              <Text style={styles.paymentFilterText}>
+                {paymentFilter.charAt(0).toUpperCase() + paymentFilter.slice(1)}
+              </Text>
+              <Ionicons 
+                name={isPaymentFilterVisible ? "chevron-up" : "chevron-down"} 
+                size={16} 
+                color="#4B9EFF" 
+              />
+            </TouchableOpacity>
+            {isPaymentFilterVisible && (
+              <View style={styles.paymentFilterDropdown}>
+                <TouchableOpacity 
+                  style={[styles.paymentFilterOption, paymentFilter === 'all' && styles.paymentFilterOptionSelected]}
+                  onPress={() => {
+                    setPaymentFilter('all');
+                    setIsPaymentFilterVisible(false);
+                  }}
+                >
+                  <Text style={[styles.paymentFilterOptionText, paymentFilter === 'all' && styles.paymentFilterOptionTextSelected]}>
+                    All
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.paymentFilterOption, paymentFilter === 'paid' && styles.paymentFilterOptionSelected]}
+                  onPress={() => {
+                    setPaymentFilter('paid');
+                    setIsPaymentFilterVisible(false);
+                  }}
+                >
+                  <Text style={[styles.paymentFilterOptionText, paymentFilter === 'paid' && styles.paymentFilterOptionTextSelected]}>
+                    Paid
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.paymentFilterOption, paymentFilter === 'unpaid' && styles.paymentFilterOptionSelected]}
+                  onPress={() => {
+                    setPaymentFilter('unpaid');
+                    setIsPaymentFilterVisible(false);
+                  }}
+                >
+                  <Text style={[styles.paymentFilterOptionText, paymentFilter === 'unpaid' && styles.paymentFilterOptionTextSelected]}>
+                    Unpaid
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -180,12 +239,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  topBarButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   screenTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
   },
   filterButton: {
+    padding: 4,
+  },
+  smallButton: {
     padding: 4,
   },
   searchContainer: {
@@ -298,5 +365,57 @@ const styles = StyleSheet.create({
   },
   dueDateText: {
     color: '#F87171', // Light red color
+  },
+  paymentFilterContainer: {
+    position: 'relative',
+  },
+  paymentFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  paymentFilterButtonActive: {
+    backgroundColor: '#D1E5FF',
+  },
+  paymentFilterText: {
+    color: '#4B9EFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  paymentFilterDropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 4,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1000,
+    minWidth: 100,
+  },
+  paymentFilterOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  paymentFilterOptionSelected: {
+    backgroundColor: '#E8F2FF',
+  },
+  paymentFilterOptionText: {
+    color: '#1F2937',
+    fontSize: 14,
+  },
+  paymentFilterOptionTextSelected: {
+    color: '#4B9EFF',
+    fontWeight: '500',
   },
 }); 
