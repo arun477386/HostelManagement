@@ -28,15 +28,46 @@ export default function HostelsScreen() {
   // Map hostels to always include id and name for UI
   const hostels = (rawHostels || []).map((h: any) => ({ ...h, id: h.id, name: h.name }));
 
+  const calculateHostelStats = (hostel: any) => {
+    const activeStudents = Object.values(hostel.students || {}).filter((student: any) => student.isActive);
+    const totalStudents = activeStudents.length;
+    
+    const pendingFees = activeStudents.reduce((total: number, student: any) => {
+      const paidStatus = getStudentPaidStatus(student);
+      return paidStatus === 'Unpaid' ? total + student.feeAmount : total;
+    }, 0);
+
+    const rooms = Object.values(hostel.rooms || {});
+    const vacantRooms = rooms.filter((room: any) => {
+      const roomStudents = Object.values(hostel.students || {}).filter((student: any) => 
+        student.roomId === room.roomNumber && student.isActive
+      );
+      return roomStudents.length < room.capacity;
+    }).length;
+
+    return {
+      totalStudents,
+      pendingFees,
+      vacantRooms
+    };
+  };
+
   const renderHostelCard = ({ item }: { item: Hostel }) => {
+    const stats = calculateHostelStats(item);
     // Calculate dynamic values
     const roomsCount = item.rooms ? Object.keys(item.rooms).length : 0;
-    const studentsCount = item.students ? Object.keys(item.students).length : 0;
-    const vacantRooms = item.rooms ? Object.values(item.rooms).filter((room: any) => !room.isFull).length : 0;
+    const studentsCount = item.students ? Object.values(item.students).filter((student: any) => student.isActive).length : 0;
+    const vacantRooms = item.rooms ? Object.values(item.rooms).filter((room: any) => {
+      const roomStudents = Object.values(item.students || {}).filter((student: any) => 
+        student.roomId === room.roomNumber && student.isActive
+      );
+      return roomStudents.length < room.capacity;
+    }).length : 0;
     let received = 0;
     let pending = 0;
     if (item.students) {
       Object.values(item.students).forEach((student: any) => {
+        if (!student.isActive) return;
         if (getStudentPaidStatus(student) === 'Paid') {
           received += student.feeAmount || 0;
         } else {

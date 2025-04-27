@@ -122,4 +122,29 @@ export const getRecentActivities = async (ownerId: string, max = 10) => {
   const q = query(activitiesRef, orderBy('createdAt', 'desc'), limit(max));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const updateStudentStatus = async (
+  ownerId: string,
+  hostelId: string,
+  studentId: string,
+  isActive: boolean,
+  leaveDate?: string
+) => {
+  try {
+    const ownerRef = doc(db, 'owners', ownerId);
+    const updates: any = {
+      [`hostels.${hostelId}.students.${studentId}.isActive`]: isActive,
+    };
+
+    if (leaveDate) {
+      updates[`hostels.${hostelId}.students.${studentId}.leaveDate`] = leaveDate;
+    }
+
+    await updateDoc(ownerRef, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating student status:', error);
+    throw error;
+  }
 }; 

@@ -59,10 +59,13 @@ const calculateNewJoins = (hostel: any) => {
 };
 
 const calculateVacantRooms = (hostel: any) => {
-  // Count rooms that are not full
-  return Object.values(hostel.rooms || {}).reduce((count: number, room: any) => {
-    return count + (!room.isFull ? 1 : 0);
-  }, 0);
+  // Count rooms that have space for more active students
+  return Object.values(hostel.rooms || {}).filter((room: any) => {
+    const roomStudents = Object.values(hostel.students || {}).filter((student: any) => 
+      student.roomId === room.roomNumber && student.isActive
+    );
+    return roomStudents.length < room.capacity;
+  }).length;
 };
 
 const calculateOverduePayments = (hostel: any) => {
@@ -132,9 +135,16 @@ const getActivityIconAndColor = (type: string) => {
       return { icon: 'person-add-outline', color: '#10B981' };
     case 'hostel_added':
       return { icon: 'business-outline', color: '#4B9EFF' };
+    case 'student_vacated':
+      return { icon: 'person-remove-outline', color: '#F87171' };
     default:
       return { icon: 'information-circle-outline', color: '#6B7280' };
   }
+};
+
+// Add this helper function at the top with other helper functions
+const formatNumber = (num: number) => {
+  return new Intl.NumberFormat('en-IN').format(num);
 };
 
 export default function Home() {
@@ -159,7 +169,7 @@ export default function Home() {
       ...hostel,
       id: hostel.id,
       name: hostel.name,
-      totalStudents: Object.keys(hostel.students || {}).length,
+      totalStudents: Object.values(hostel.students || {}).filter((student: any) => student.isActive).length,
       duesToday: calculateDuesToday(hostel),
       pendingFees: calculatePendingFees(hostel),
       newJoins: calculateNewJoins(hostel),
@@ -329,21 +339,21 @@ export default function Home() {
         <View style={styles.amountRow}>
           <View style={styles.amountCard}>
             <Ionicons name="cash-outline" size={24} color="#4B9EFF" style={{ marginBottom: 6 }} />
-            <Text style={styles.amountTitle}>Amount Collected</Text>
-            <Text style={styles.amountValue}>₹{amountCollected}</Text>
+            <Text style={styles.amountTitle}>Received</Text>
+            <Text style={styles.amountValue}>₹{formatNumber(amountCollected)}</Text>
             {previousMonthData && (
               <Text style={styles.previousMonthText}>
-                Last Month: ₹{previousMonthData.amountCollected}
+                Last Month: ₹{formatNumber(previousMonthData.amountCollected)}
               </Text>
             )}
           </View>
           <View style={styles.amountCard}>
             <Ionicons name="wallet-outline" size={24} color="#FF4C4C" style={{ marginBottom: 6, marginRight: 4 }} />
             <Text style={styles.amountTitle}>Pending Fees</Text>
-            <Text style={styles.amountValue}>₹{pendingFees}</Text>
+            <Text style={styles.amountValue}>₹{formatNumber(pendingFees)}</Text>
             {previousMonthData && (
               <Text style={styles.previousMonthText}>
-                Last Month: ₹{previousMonthData.pendingFees}
+                Last Month: ₹{formatNumber(previousMonthData.pendingFees)}
               </Text>
             )}
           </View>

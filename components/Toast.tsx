@@ -18,7 +18,7 @@ export default function Toast({ message, type, onHide }: ToastProps) {
         duration: 300,
         useNativeDriver: true,
       }),
-      Animated.delay(2000),
+      Animated.delay(500),
       Animated.timing(opacity, {
         toValue: 0,
         duration: 300,
@@ -53,7 +53,7 @@ export default function Toast({ message, type, onHide }: ToastProps) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 80,
     left: 20,
     right: 20,
     padding: 16,

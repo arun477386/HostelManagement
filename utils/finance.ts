@@ -1,6 +1,11 @@
 import { differenceInMonths, parseISO } from 'date-fns';
 
-export function getStudentPaidStatus(student: { joinDate: string; payments?: Record<string, any> }) {
+export function getStudentPaidStatus(student: { joinDate: string; payments?: Record<string, any>; isActive: boolean }) {
+  // Don't process inactive students
+  if (!student.isActive) {
+    return null;
+  }
+
   const today = new Date();
   let joinDate: Date;
   try {

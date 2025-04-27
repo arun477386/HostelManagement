@@ -70,10 +70,13 @@ export default function RoomViewScreen() {
     );
   }
 
-  const roomStudents = students.filter(student => 
-    student.roomId === roomNumber && 
-    student.hostelId === hostelId
-  );
+  const roomStudents = hostel ? Object.entries(hostel.students)
+    .filter(([_, student]: [string, any]) => student.roomId === roomNumber && student.isActive)
+    .map(([id, student]: [string, any]) => ({
+      id,
+      ...student,
+      hostelId: hostelId as string
+    })) : [];
 
   return (
     <View style={styles.container}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../services/AuthContext';
@@ -18,6 +18,7 @@ interface Student {
   joinDate: string;
   hostelId: string;
   roomId: string;
+  isActive: boolean;
 }
 
 interface HostelOption {
@@ -25,18 +26,70 @@ interface HostelOption {
   name: string;
 }
 
-// Helper function to calculate due date
+// Memoized helper function to calculate due date
 const calculateDueDate = (joinDate: string) => {
   const joinDateObj = new Date(joinDate);
-  // Get the day of the month
   const day = joinDateObj.getDate();
-  // Create a new date for the next month
   const dueDate = new Date(joinDateObj);
   dueDate.setMonth(dueDate.getMonth() + 1);
-  // Set the same day of the month
   dueDate.setDate(day);
   return dueDate;
 };
+
+// Memoized StudentItem component
+const StudentItem = React.memo(({ 
+  item, 
+  hostelName, 
+  onPress 
+}: { 
+  item: Student; 
+  hostelName: string; 
+  onPress: () => void;
+}) => {
+  const paidStatus = getStudentPaidStatus(item);
+  const dueDate = useMemo(() => calculateDueDate(item.joinDate), [item.joinDate]);
+  
+  return (
+    <TouchableOpacity 
+      style={styles.studentRow}
+      onPress={onPress}
+    >
+      <View style={styles.studentInfo}>
+        <View style={styles.nameRow}>
+          <Text style={styles.studentName} numberOfLines={1} ellipsizeMode="tail">{item.fullName}</Text>
+          <View style={styles.paymentStatus}>
+            <Ionicons name={paidStatus === 'Paid' ? "checkmark-circle" : "alert-circle"} size={16} color={paidStatus === 'Paid' ? "#10B981" : "#EF4444"} />
+            <Text style={[styles.paymentStatusText, paidStatus === 'Paid' ? styles.paid : styles.unpaid]}>
+              {paidStatus === 'Paid' ? 'Paid' : 'Unpaid'}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.studentDetails}>
+          {hostelName} • Room {item.roomId}
+        </Text>
+        <View style={styles.studentMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons name="call-outline" size={16} color="#6B7280" />
+            <Text style={styles.metaText}>{item.phone}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+            <Text style={styles.metaText}>
+              Joined {format(new Date(item.joinDate), 'MMM d, yyyy')}
+            </Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={16} color="#F87171" />
+            <Text style={[styles.metaText, styles.dueDateText]}>
+              Due {format(dueDate, 'MMM d, yyyy')}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+    </TouchableOpacity>
+  );
+});
 
 export default function SearchScreen() {
   const { user } = useAuth();
@@ -49,67 +102,44 @@ export default function SearchScreen() {
   const { showToast } = useToast();
   const router = useRouter();
 
-  // Map hostels to always include id and name for UI
-  const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
+  // Memoize hostels array
+  const hostels = useMemo(() => 
+    [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))],
+    [rawHostels]
+  );
 
-  const filteredStudents = students.filter(student => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = student.fullName.toLowerCase().includes(searchLower) ||
-      student.phone.includes(searchQuery);
-    const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
-    const matchesPayment = paymentFilter === 'all' || 
-      (paymentFilter === 'paid' && getStudentPaidStatus(student) === 'Paid') ||
-      (paymentFilter === 'unpaid' && getStudentPaidStatus(student) === 'Unpaid');
-    return matchesSearch && matchesHostel && matchesPayment;
-  });
+  // Memoize filtered students
+  const filteredStudents = useMemo(() => 
+    students.filter(student => {
+      // Only process active students
+      if (!student.isActive) return false;
 
-  const renderStudentItem = ({ item }: { item: Student }) => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = student.fullName.toLowerCase().includes(searchLower) ||
+        student.phone.includes(searchQuery);
+      const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
+      const paidStatus = getStudentPaidStatus(student);
+      const matchesPayment = paymentFilter === 'all' || 
+        (paymentFilter === 'paid' && paidStatus === 'Paid') ||
+        (paymentFilter === 'unpaid' && paidStatus === 'Unpaid');
+      return matchesSearch && matchesHostel && matchesPayment;
+    }),
+    [students, searchQuery, selectedHostelId, paymentFilter]
+  );
+
+  // Memoize renderItem function
+  const renderStudentItem = useCallback(({ item }: { item: Student }) => {
     const hostelObj = hostels.find(h => h.id === item.hostelId);
     const hostelName = hostelObj ? hostelObj.name : '';
-    const paidStatus = getStudentPaidStatus(item);
-    const dueDate = calculateDueDate(item.joinDate);
     
     return (
-      <TouchableOpacity 
-        style={styles.studentRow}
+      <StudentItem
+        item={item}
+        hostelName={hostelName}
         onPress={() => router.push({ pathname: `/student-profile/${item.id}`, params: { hostelId: item.hostelId } })}
-      >
-        <View style={styles.studentInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.studentName} numberOfLines={1} ellipsizeMode="tail">{item.fullName}</Text>
-            <View style={styles.paymentStatus}>
-              <Ionicons name={paidStatus === 'Paid' ? "checkmark-circle" : "alert-circle"} size={16} color={paidStatus === 'Paid' ? "#10B981" : "#EF4444"} />
-              <Text style={[styles.paymentStatusText, paidStatus === 'Paid' ? styles.paid : styles.unpaid]}>
-                {paidStatus === 'Paid' ? 'Paid' : 'Unpaid'}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.studentDetails}>
-            {hostelName} • Room {item.roomId}
-          </Text>
-          <View style={styles.studentMeta}>
-            <View style={styles.metaItem}>
-              <Ionicons name="call-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>{item.phone}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>
-                Joined {format(new Date(item.joinDate), 'MMM d, yyyy')}
-              </Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={16} color="#F87171" />
-              <Text style={[styles.metaText, styles.dueDateText]}>
-                Due {format(dueDate, 'MMM d, yyyy')}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#6B7280" />
-      </TouchableOpacity>
+      />
     );
-  };
+  }, [hostels, router]);
 
   return (
     <View style={styles.container}>

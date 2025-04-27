@@ -65,9 +65,49 @@ export default function HostelViewScreen() {
     );
   }
 
+  const getStudentPaidStatus = (student: any) => {
+    if (!student.feePaid) return 'Pending';
+    const currentDate = new Date();
+    const lastPaidDate = new Date(student.feePaid);
+    const monthsSinceLastPayment = (currentDate.getFullYear() - lastPaidDate.getFullYear()) * 12 + 
+      (currentDate.getMonth() - lastPaidDate.getMonth());
+    return monthsSinceLastPayment < 1 ? 'Paid' : 'Pending';
+  };
+
+  const calculateStats = () => {
+    if (!hostel) return { totalRooms: 0, totalStudents: 0, availableRooms: 0, totalFees: 0, pendingFees: 0 };
+    
+    const totalRooms = Object.keys(hostel.rooms || {}).length;
+    const totalStudents = Object.values(hostel.students || {}).filter((student: any) => student.isActive).length;
+    const availableRooms = Object.values(hostel.rooms || {}).filter((room: any) => {
+      const roomStudents = Object.values(hostel.students || {}).filter((student: any) => 
+        student.roomId === room.roomNumber && student.isActive
+      );
+      return roomStudents.length < room.capacity;
+    }).length;
+    
+    let totalFees = 0;
+    let pendingFees = 0;
+    Object.values(hostel.students || {}).forEach((student: any) => {
+      if (!student.isActive) return;
+      if (getStudentPaidStatus(student) === 'Paid') {
+        totalFees += student.feeAmount || 0;
+      } else {
+        pendingFees += student.feeAmount || 0;
+      }
+    });
+    
+    return { totalRooms, totalStudents, availableRooms, totalFees, pendingFees };
+  };
+
   const totalRooms = Object.keys(hostel.rooms).length;
-  const totalStudents = Object.keys(hostel.students || {}).length;
-  const occupiedRooms = Object.values(hostel.rooms).filter(room => room.students.length > 0).length;
+  const totalStudents = Object.values(hostel.students || {}).filter((student: any) => student.isActive).length;
+  const occupiedRooms = Object.values(hostel.rooms).filter(room => {
+    const roomStudents = Object.values(hostel.students || {}).filter((student: any) => 
+      student.roomId === room.roomNumber && student.isActive
+    );
+    return roomStudents.length > 0;
+  }).length;
   const availableRooms = totalRooms - occupiedRooms;
 
   const filteredRooms = Object.entries(hostel.rooms).filter(([roomNumber, room]) => {
@@ -100,32 +140,38 @@ export default function HostelViewScreen() {
     return false;
   });
 
-  const renderRoomCard = ({ item: [roomNumber, room] }: { item: [string, Room] }) => (
-    <TouchableOpacity 
-      style={styles.roomCard}
-      onPress={() => router.push({ pathname: `/room/${roomNumber}`, params: { hostelId } })}
-    >
-      <View style={styles.roomHeader}>
-        <View style={styles.roomNumberContainer}>
-          <Ionicons name="bed-outline" size={20} color={colors.primary} />
-          <Text style={styles.roomNumber}>Room {roomNumber}</Text>
+  const renderRoomCard = ({ item: [roomNumber, room] }: { item: [string, Room] }) => {
+    const activeStudentsCount = Object.values(hostel.students || {}).filter((student: any) => 
+      student.roomId === roomNumber && student.isActive
+    ).length;
+    
+    return (
+      <TouchableOpacity 
+        style={styles.roomCard}
+        onPress={() => router.push({ pathname: `/room/${roomNumber}`, params: { hostelId } })}
+      >
+        <View style={styles.roomHeader}>
+          <View style={styles.roomNumberContainer}>
+            <Ionicons name="bed-outline" size={20} color={colors.primary} />
+            <Text style={styles.roomNumber}>Room {roomNumber}</Text>
+          </View>
+          <View style={[styles.roomStatus, activeStudentsCount >= room.capacity ? styles.fullRoom : styles.availableRoom]}>
+            <Text style={styles.roomStatusText}>{activeStudentsCount >= room.capacity ? 'Full' : 'Available'}</Text>
+          </View>
         </View>
-        <View style={[styles.roomStatus, room.isFull ? styles.fullRoom : styles.availableRoom]}>
-          <Text style={styles.roomStatusText}>{room.isFull ? 'Full' : 'Available'}</Text>
+        <View style={styles.roomDetails}>
+          <View style={styles.roomDetailItem}>
+            <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.roomDetailText}>{activeStudentsCount}/{room.capacity} Students</Text>
+          </View>
+          <View style={styles.roomDetailItem}>
+            <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.roomDetailText}>{room.sharingType}-sharing</Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.roomDetails}>
-        <View style={styles.roomDetailItem}>
-          <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.roomDetailText}>{room.students.length}/{room.capacity} Students</Text>
-        </View>
-        <View style={styles.roomDetailItem}>
-          <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.roomDetailText}>{room.sharingType}-sharing</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>

@@ -310,6 +310,9 @@ export default function Add() {
   };
 
   const filteredStudents = students.filter(student => {
+    // Only show active students
+    if (!student.isActive) return false;
+    
     // Filter by hostel
     const matchesHostel = selectedHostelId === 'all' || student.hostelId === selectedHostelId;
     return matchesHostel;

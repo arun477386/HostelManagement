@@ -19,6 +19,7 @@ interface Student {
   hostelId: string;
   roomId: string;
   feeAmount: number;
+  isActive: boolean;
 }
 
 interface HostelOption {
@@ -39,12 +40,15 @@ export default function DuePaymentsScreen() {
   const hostels = [{ id: 'all', name: 'All Hostels' }, ...(rawHostels || []).map((h: any) => ({ id: h.id, name: h.name }))];
 
   const filteredStudents = students.filter(student => {
+    // Only process active students with unpaid status
+    if (!student.isActive) return false;
+    
     const paidStatus = getStudentPaidStatus(student);
+    if (paidStatus !== 'Unpaid') return false;
+
     const searchLower = searchQuery.toLowerCase();
-    return paidStatus === 'Unpaid' && (
-      student.fullName.toLowerCase().includes(searchLower) ||
-      student.phone.includes(searchQuery)
-    );
+    return student.fullName.toLowerCase().includes(searchLower) ||
+      student.phone.includes(searchQuery);
   });
 
   const renderStudentItem = ({ item }: { item: Student }) => {

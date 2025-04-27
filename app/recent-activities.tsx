@@ -16,6 +16,8 @@ const getActivityIconAndColor = (type: string) => {
       return { icon: 'person-add-outline', color: '#10B981' };
     case 'hostel_added':
       return { icon: 'business-outline', color: '#4B9EFF' };
+    case 'student_vacated':
+      return { icon: 'person-remove-outline', color: '#F87171' };
     default:
       return { icon: 'information-circle-outline', color: '#6B7280' };
   }

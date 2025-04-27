@@ -51,6 +51,10 @@ export default function Profile() {
     router.push('/help-support');
   };
 
+  const handleVacatedStudents = () => {
+    router.push('/vacated-students');
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -78,14 +82,6 @@ export default function Profile() {
       {/* Manage Settings Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Manage Settings</Text>
-        
-        <TouchableOpacity style={styles.settingItem} onPress={handleManageHostels}>
-          <View style={styles.settingItemLeft}>
-            <Ionicons name="business-outline" size={24} color="#4B9EFF" />
-            <Text style={styles.settingItemText}>Manage Hostels</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#606770" />
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingItem} onPress={handleEditProfile}>
           <View style={styles.settingItemLeft}>
@@ -94,6 +90,18 @@ export default function Profile() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#606770" />
         </TouchableOpacity>
+        
+        
+
+        <TouchableOpacity style={styles.settingItem} onPress={handleVacatedStudents}>
+          <View style={styles.settingItemLeft}>
+            <Ionicons name="people-outline" size={24} color="#FF4C4C" />
+            <Text style={styles.settingItemText}>Vacated Students</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#606770" />
+        </TouchableOpacity>
+
+        
 
         <View style={styles.settingItem}>
           <View style={styles.settingItemLeft}>
@@ -110,7 +118,16 @@ export default function Profile() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#606770" />
         </View>
+        <TouchableOpacity style={styles.settingItem} onPress={handleManageHostels}>
+          <View style={styles.settingItemLeft}>
+            <Ionicons name="business-outline" size={24} color="#4B9EFF" />
+            <Text style={styles.settingItemText}>Manage Hostels</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#606770" />
+        </TouchableOpacity>
       </View>
+
+      
 
       {/* System Section */}
       <View style={styles.section}>
