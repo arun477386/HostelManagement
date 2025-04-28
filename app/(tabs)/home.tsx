@@ -407,7 +407,7 @@ export default function Home() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Due Payments</Text>
           <TouchableOpacity onPress={() => router.push('/due-payments')}>
-            <Text style={styles.seeAllText}>See All</Text>
+            <Text style={styles.seeAllText}>See All ({dueStudents.length})</Text>
           </TouchableOpacity>
         </View>
         {dueStudents.length === 0 ? (
@@ -466,25 +466,16 @@ export default function Home() {
         </View>
       </View>
 
-      {/* Notifications */}
+      {/* Complaints */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
+          <Text style={styles.sectionTitle}>Complaints</Text>
           <TouchableOpacity>
-            <Text style={styles.seeAllText}>See All</Text>
+            <Text style={styles.seeAllText}>See All (0)</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.notificationList}>
-          {notifications.map((notification, index) => (
-            <View key={index} style={styles.notificationItem}>
-              <Ionicons 
-                name={getNotificationIcon(notification.type)} 
-                size={20} 
-                color={getNotificationColor(notification.type)} 
-              />
-              <Text style={styles.notificationText}>{notification.text}</Text>
-            </View>
-          ))}
+        <View style={styles.comingSoonContainer}>
+          <Text style={styles.comingSoonText}>🎉 A smarter way to manage is coming soon. Stay tuned!</Text>
         </View>
       </View>
 
@@ -854,5 +845,22 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
     textAlign: 'center',
+  },
+  comingSoonContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E8F2FF',
+    borderStyle: 'dashed',
+  },
+  comingSoonText: {
+    fontSize: 16,
+    color: '#4B9EFF',
+    textAlign: 'center',
+    fontWeight: '600',
+    lineHeight: 24,
   },
 }); 

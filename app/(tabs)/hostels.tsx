@@ -125,14 +125,14 @@ export default function HostelsScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton}>
+          <View style={styles.actionButton}>
             <Ionicons name="bed-outline" size={20} color="#4B9EFF" />
             <Text style={styles.actionButtonText}>Manage Rooms</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          </View>
+          <View style={styles.actionButton}>
             <Ionicons name="people-outline" size={20} color="#4B9EFF" />
             <Text style={styles.actionButtonText}>View Students</Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -287,11 +287,8 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F2FF',
-    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    marginRight: 8,
   },
   actionButtonText: {
     fontSize: 13,

@@ -78,6 +78,8 @@ export default function RoomViewScreen() {
       hostelId: hostelId as string
     })) : [];
 
+  const isRoomFull = roomStudents.length >= room.capacity;
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -98,14 +100,14 @@ export default function RoomViewScreen() {
               <Ionicons name="bed-outline" size={64} color={colors.primary} />
               <View style={styles.titleContainer}>
                 <Text style={styles.roomNumber}>Room {room.roomNumber}</Text>
-                <View style={[styles.roomStatus, room.isFull ? styles.full : styles.available]}>
+                <View style={[styles.roomStatus, isRoomFull ? styles.full : styles.available]}>
                   <Ionicons 
-                    name={room.isFull ? 'close-circle' : 'checkmark-circle'} 
+                    name={isRoomFull ? 'close-circle' : 'checkmark-circle'} 
                     size={16} 
-                    color={room.isFull ? colors.error : colors.success} 
+                    color={isRoomFull ? colors.error : colors.success} 
                   />
-                  <Text style={[styles.roomStatusText, room.isFull ? styles.full : styles.available]}>
-                    {room.isFull ? 'Full' : 'Available'}
+                  <Text style={[styles.roomStatusText, isRoomFull ? styles.full : styles.available]}>
+                    {isRoomFull ? 'Full' : 'Available'}
                   </Text>
                 </View>
               </View>

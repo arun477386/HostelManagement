@@ -102,17 +102,29 @@ export default function Add() {
 
   // Function to check and update room registry
   const updateRoomRegistry = (roomNumber: string, sharingType?: SharingType) => {
-    if (!roomNumber) return;
+    if (!roomNumber) return null;
 
-    const existingRoom = roomRegistry[roomNumber];
+    // Check if room exists in the current hostel
+    const currentHostel = rawHostels?.find(h => h.id === formData.hostelId);
+    const existingRoom = currentHostel?.rooms?.[roomNumber];
     
     if (existingRoom) {
       // Room exists, update form data with stored sharing type
       setFormData(prev => ({
         ...prev,
-        sharingType: existingRoom.sharingType
+        sharingType: existingRoom.sharingType as SharingType
       }));
-      return existingRoom;
+
+      // Calculate current students in the room
+      const currentStudents = Object.values(currentHostel.students || {}).filter(
+        (student: any) => student.roomId === roomNumber && student.isActive
+      ).length;
+
+      return {
+        sharingType: existingRoom.sharingType as SharingType,
+        maxCapacity: existingRoom.capacity,
+        currentStudents
+      };
     } else if (sharingType) {
       // New room, add to registry
       const newRoom = {
@@ -139,7 +151,7 @@ export default function Add() {
       if (roomData.currentStudents >= roomData.maxCapacity) {
         setErrors(prev => ({
           ...prev,
-          roomId: `Room ${roomNumber} is full`
+          roomId: `Room ${roomNumber} is full (${roomData.currentStudents}/${roomData.maxCapacity} students)`
         }));
       } else {
         setErrors(prev => {
@@ -492,6 +504,28 @@ export default function Add() {
                       keyboardType="numeric"
                     />
                     {errors.roomId && <Text style={styles.error}>{errors.roomId}</Text>}
+                    {formData.roomId && !errors.roomId && (
+                      <View style={styles.roomStatus}>
+                        <Ionicons 
+                          name="information-circle-outline" 
+                          size={16} 
+                          color="#4B9EFF" 
+                        />
+                        <Text style={styles.roomStatusText}>
+                          {(() => {
+                            const currentHostel = rawHostels?.find(h => h.id === formData.hostelId);
+                            const room = currentHostel?.rooms?.[formData.roomId];
+                            if (room) {
+                              const currentStudents = Object.values(currentHostel?.students || {}).filter(
+                                (student: any) => student.roomId === formData.roomId && student.isActive
+                              ).length;
+                              return `${currentStudents}/${room.capacity} students`;
+                            }
+                            return `0/${formData.sharingType} students`;
+                          })()}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <View style={styles.halfInput}>
                     <TouchableOpacity
@@ -1226,5 +1260,16 @@ const styles = StyleSheet.create({
     elevation: 3,
     minWidth: 0,
     width: 'auto',
+  },
+  roomStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  roomStatusText: {
+    fontSize: 12,
+    color: '#4B9EFF',
+    marginLeft: 4,
   },
 }); 

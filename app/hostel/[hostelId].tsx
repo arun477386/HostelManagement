@@ -25,6 +25,7 @@ export default function HostelViewScreen() {
   const [hostel, setHostel] = useState<Hostel | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function HostelViewScreen() {
             <Text style={styles.statLabel}>Total Students</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle-outline" size={24} color={colors.primary} />
+            <Ionicons name="bed-outline" size={24} color={colors.primary} />
             <Text style={styles.statNumber}>{availableRooms}</Text>
             <Text style={styles.statLabel}>Available Rooms</Text>
           </View>
@@ -231,33 +232,38 @@ export default function HostelViewScreen() {
           </View>
         </View>
 
-        {/* Rooms List */}
-        <View style={styles.roomsSection}>
-          <View style={styles.roomsHeader}>
-            <View style={styles.titleRow}>
-              <View style={styles.titleContainer}>
-                <Text style={styles.sectionTitle}>Rooms</Text>
-              </View>
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={18} color={colors.textSecondary} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search room..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholderTextColor={colors.textSecondary}
-                />
-                {searchQuery !== '' && (
-                  <TouchableOpacity 
-                    onPress={() => setSearchQuery('')}
-                    style={styles.clearButton}
-                  >
-                    <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+        {/* Rooms Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Rooms</Text>
+            <TouchableOpacity 
+              style={styles.searchIconButton}
+              onPress={() => setIsSearchVisible(!isSearchVisible)}
+            >
+              <Ionicons name="search-outline" size={24} color={colors.primary} />
+            </TouchableOpacity>
           </View>
+          
+          {isSearchVisible && (
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search rooms..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor={colors.textSecondary}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.clearButton}
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           <FlatList
             data={filteredRooms}
             renderItem={renderRoomCard}
@@ -378,10 +384,38 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 2,
   },
-  roomsSection: {
+  section: {
     padding: 16,
     backgroundColor: colors.cardBackground,
     marginTop: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchIconButton: {
+    padding: 4,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  clearButton: {
+    padding: 4,
   },
   roomsList: {
     paddingBottom: 16,
@@ -436,36 +470,5 @@ const styles = StyleSheet.create({
     ...typography.textSecondary,
     color: colors.textSecondary,
     marginLeft: 4,
-  },
-  roomsHeader: {
-    marginBottom: 16,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: colors.borderColor,
-    width: 180,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 6,
-    marginRight: 6,
-    color: colors.textPrimary,
-    fontSize: 15,
-    padding: 0,
-  },
-  clearButton: {
-    padding: 4,
   },
 }); 
