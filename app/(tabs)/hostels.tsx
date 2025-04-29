@@ -107,7 +107,7 @@ export default function HostelsScreen() {
             <Text style={styles.statLabel}>Pending</Text>
           </View>
           <View style={styles.statItem}>
-            <Ionicons name="business-outline" size={24} color="#4B9EFF" />
+            <Ionicons name="bed-outline" size={24} color="#4B9EFF" />
             <Text style={styles.statValue}>{roomsCount}</Text>
             <Text style={styles.statLabel}>Rooms</Text>
           </View>
@@ -117,7 +117,7 @@ export default function HostelsScreen() {
             <Text style={styles.statLabel}>Students</Text>
           </View>
           <View style={styles.statItem}>
-            <Ionicons name="bed-outline" size={24} color="#4B9EFF" />
+            <Ionicons name="bed-outline" size={24} color="#10B981" />
             <Text style={styles.statValue}>{vacantRooms}</Text>
             <Text style={styles.statLabel}>Vacant</Text>
           </View>

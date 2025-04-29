@@ -103,13 +103,12 @@ export default function HostelViewScreen() {
 
   const totalRooms = Object.keys(hostel.rooms).length;
   const totalStudents = Object.values(hostel.students || {}).filter((student: any) => student.isActive).length;
-  const occupiedRooms = Object.values(hostel.rooms).filter(room => {
+  const availableRooms = Object.values(hostel.rooms).filter((room: any) => {
     const roomStudents = Object.values(hostel.students || {}).filter((student: any) => 
       student.roomId === room.roomNumber && student.isActive
     );
-    return roomStudents.length > 0;
+    return roomStudents.length < room.capacity;
   }).length;
-  const availableRooms = totalRooms - occupiedRooms;
 
   const filteredRooms = Object.entries(hostel.rooms).filter(([roomNumber, room]) => {
     if (!searchQuery) return true;
@@ -146,6 +145,8 @@ export default function HostelViewScreen() {
       student.roomId === roomNumber && student.isActive
     ).length;
     
+    const isRoomFull = activeStudentsCount >= room.capacity;
+    
     return (
       <TouchableOpacity 
         style={styles.roomCard}
@@ -156,8 +157,15 @@ export default function HostelViewScreen() {
             <Ionicons name="bed-outline" size={20} color={colors.primary} />
             <Text style={styles.roomNumber}>Room {roomNumber}</Text>
           </View>
-          <View style={[styles.roomStatus, activeStudentsCount >= room.capacity ? styles.fullRoom : styles.availableRoom]}>
-            <Text style={styles.roomStatusText}>{activeStudentsCount >= room.capacity ? 'Full' : 'Available'}</Text>
+          <View style={[styles.roomStatus, isRoomFull ? styles.fullRoom : styles.availableRoom]}>
+            <Ionicons 
+              name={isRoomFull ? 'close-circle' : 'checkmark-circle'} 
+              size={16} 
+              color={isRoomFull ? colors.error : colors.success} 
+            />
+            <Text style={[styles.roomStatusText, isRoomFull ? styles.fullRoom : styles.availableRoom]}>
+              {isRoomFull ? 'Full' : 'Available'}
+            </Text>
           </View>
         </View>
         <View style={styles.roomDetails}>
@@ -270,6 +278,13 @@ export default function HostelViewScreen() {
             keyExtractor={([roomNumber]) => roomNumber}
             scrollEnabled={false}
             contentContainerStyle={styles.roomsList}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="bed-outline" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>No rooms added yet</Text>
+                <Text style={styles.emptySubtext}>Add rooms to start managing your hostel</Text>
+              </View>
+            )}
           />
         </View>
       </ScrollView>
@@ -444,19 +459,24 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   roomStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 16,
+  },
+  roomStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   fullRoom: {
     backgroundColor: colors.primaryLight,
+    color: colors.error,
   },
   availableRoom: {
     backgroundColor: colors.primaryLight,
-  },
-  roomStatusText: {
-    ...typography.textSecondary,
-    color: colors.textPrimary,
+    color: colors.success,
   },
   roomDetails: {
     flexDirection: 'row',
@@ -470,5 +490,22 @@ const styles = StyleSheet.create({
     ...typography.textSecondary,
     color: colors.textSecondary,
     marginLeft: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    ...typography.titleLG,
+    color: colors.textPrimary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    ...typography.textSecondary,
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
   },
 }); 

@@ -197,9 +197,19 @@ export default function Add() {
     if (!formData.joiningAdvance) newErrors.joiningAdvance = 'Joining advance is required';
 
     // Check room capacity
-    const roomData = roomRegistry[formData.roomId];
-    if (roomData && roomData.currentStudents >= roomData.maxCapacity) {
-      newErrors.roomId = `Room ${formData.roomId} is full`;
+    const currentHostel = rawHostels?.find(h => h.id === formData.hostelId);
+    const room = currentHostel?.rooms?.[formData.roomId];
+    if (room) {
+      const currentStudents = Object.values(currentHostel?.students || {}).filter(
+        (student: any) => student.roomId === formData.roomId && student.isActive
+      ).length;
+      
+      if (currentStudents >= room.capacity) {
+        newErrors.roomId = `Room ${formData.roomId} is full (${currentStudents}/${room.capacity} students)`;
+        setErrors(newErrors);
+        showToast('Cannot add student: Room is full', 'error');
+        return;
+      }
     }
 
     setErrors(newErrors);
@@ -217,6 +227,15 @@ export default function Add() {
 
       const hostel = ownerDoc.hostels[formData.hostelId];
       if (!hostel) throw new Error('Hostel not found');
+
+      // Double check room capacity before creating student
+      const roomStudents = Object.values(hostel.students || {}).filter(
+        (student: any) => student.roomId === formData.roomId && student.isActive
+      ).length;
+      
+      if (roomStudents >= hostel.rooms[formData.roomId]?.capacity) {
+        throw new Error(`Room ${formData.roomId} is full (${roomStudents}/${hostel.rooms[formData.roomId].capacity} students)`);
+      }
 
       // Create room if it doesn't exist
       if (!hostel.rooms[formData.roomId]) {
@@ -382,7 +401,7 @@ export default function Add() {
               style={styles.hostelSelector}
               onPress={() => setIsHostelDropdownOpen(!isHostelDropdownOpen)}
             >
-              <Ionicons name="business-outline" size={16} color="#4B9EFF" style={{ marginRight: 3 }} />
+              <Ionicons name="business-outline" size={16} color="#4B9EFF" />
               <Text
                 style={styles.hostelText}
                 numberOfLines={1}
@@ -394,7 +413,6 @@ export default function Add() {
                 name={isHostelDropdownOpen ? "chevron-up" : "chevron-down"} 
                 size={16} 
                 color="#4B9EFF" 
-                style={{ marginLeft: 6 }}
               />
             </TouchableOpacity>
           )}
